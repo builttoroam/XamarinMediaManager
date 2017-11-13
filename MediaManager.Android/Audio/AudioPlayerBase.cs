@@ -1,7 +1,5 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
-using System.Threading;
 using System.Threading.Tasks;
 using Android.App;
 using Android.Content;
@@ -11,14 +9,11 @@ using Plugin.MediaManager.Abstractions;
 using Plugin.MediaManager.Abstractions.Enums;
 using Plugin.MediaManager.Abstractions.EventArguments;
 using Plugin.MediaManager.MediaSession;
+using Android.OS;
+using Java.Util.Concurrent;
 
 namespace Plugin.MediaManager
 {
-
-    using Android.OS;
-
-    using Java.Util.Concurrent;
-
     public delegate IMediaFile GetNextSong();
     public class AudioPlayerBase<TService> : IAudioPlayer where TService : MediaServiceBase
     {
@@ -27,18 +22,19 @@ namespace Plugin.MediaManager
         public event MediaFinishedEventHandler MediaFinished;
         public event PlayingChangedEventHandler PlayingChanged;
         public event StatusChangedEventHandler StatusChanged;
-        public event MediaFileChangedEventHandler MediaFileChanged;
         public event MediaFileFailedEventHandler MediaFileFailed;
 
-        public Context applicationContext;
-        private MediaServiceConnection<TService> mediaPlayerServiceConnection;
-        private Intent mediaPlayerServiceIntent;
-        private MediaSessionManager _sessionManager;
+        private readonly MediaServiceConnection<TService> _mediaPlayerServiceConnection;
+        private readonly MediaSessionManager _sessionManager;
+        private readonly IScheduledExecutorService _executorService = Executors.NewSingleThreadScheduledExecutor();
 
-        private IScheduledExecutorService _executorService = Executors.NewSingleThreadScheduledExecutor();
+        private Intent _mediaPlayerServiceIntent;
+
         private IScheduledFuture _scheduledFuture;
 
-        private bool isBound;
+        private bool _isBound;
+
+        public Context ApplicationContext;
 
         public TimeSpan Position => GetMediaPlayerService().Position;
 
@@ -55,7 +51,7 @@ namespace Plugin.MediaManager
         {
             get
             {
-                if (!isBound) return MediaPlayerStatus.Stopped;
+                if (!_isBound) return MediaPlayerStatus.Stopped;
                 var state = GetMediaPlayerService().MediaPlayerState;
                 return GetStatusByCompatValue(state);
             }
@@ -81,26 +77,28 @@ namespace Plugin.MediaManager
 
         public AudioPlayerBase(MediaSessionManager sessionManager)
         {
+            ApplicationContext = Application.Context;
+
             _sessionManager = sessionManager;
-            applicationContext = Application.Context;
-            mediaPlayerServiceIntent = GetMediaServiceIntent();
-            mediaPlayerServiceConnection = new MediaServiceConnection<TService>(this);
-            applicationContext.BindService(mediaPlayerServiceIntent, mediaPlayerServiceConnection, Bind.AutoCreate);
+            _mediaPlayerServiceIntent = GetMediaServiceIntent();
+            _mediaPlayerServiceConnection = new MediaServiceConnection<TService>(this);
             _sessionManager.OnStatusChanged += (sender, i) => Status = GetStatusByCompatValue(i);
+
+            ApplicationContext.BindService(_mediaPlayerServiceIntent, _mediaPlayerServiceConnection, Bind.AutoCreate);
             StatusChanged += (sender, args) => OnPlayingHandler(args);
         }
 
         public Intent GetMediaServiceIntent()
         {
-            return new Intent(applicationContext, typeof(TService));
+            return new Intent(ApplicationContext, typeof(TService));
         }
 
         public void UnbindMediaPlayerService()
         {
-            if (isBound)
+            if (_isBound)
             {
-                applicationContext.UnbindService(mediaPlayerServiceConnection);
-                isBound = false;
+                ApplicationContext.UnbindService(_mediaPlayerServiceConnection);
+                _isBound = false;
             }
         }
 
@@ -128,17 +126,44 @@ namespace Plugin.MediaManager
             await GetMediaPlayerService().Seek(position);
         }
 
-
         public virtual async Task Stop()
         {
             await BinderReady();
             await GetMediaPlayerService().Stop();
         }
 
+        public MediaPlayerStatus GetStatusByCompatValue(int state)
+        {
+            switch (state)
+            {
+                case PlaybackStateCompat.StateFastForwarding:
+                case PlaybackStateCompat.StateRewinding:
+                case PlaybackStateCompat.StateSkippingToNext:
+                case PlaybackStateCompat.StateSkippingToPrevious:
+                case PlaybackStateCompat.StateSkippingToQueueItem:
+                case PlaybackStateCompat.StatePlaying:
+                    return MediaPlayerStatus.Playing;
+
+                case PlaybackStateCompat.StatePaused:
+                    return MediaPlayerStatus.Paused;
+
+                case PlaybackStateCompat.StateConnecting:
+                case PlaybackStateCompat.StateBuffering:
+                    return MediaPlayerStatus.Buffering;
+
+                case PlaybackStateCompat.StateError:
+                case PlaybackStateCompat.StateStopped:
+                    return MediaPlayerStatus.Stopped;
+
+                default:
+                    return MediaPlayerStatus.Stopped;
+            }
+        }
+
         internal void OnServiceConnected(MediaServiceBinder serviceBinder)
         {
             Binder = serviceBinder;
-            isBound = true;
+            _isBound = true;
 
             if (AlternateRemoteCallback != null)
                 GetMediaPlayerService().AlternateRemoteCallback = AlternateRemoteCallback;
@@ -155,7 +180,7 @@ namespace Plugin.MediaManager
 
         internal void OnServiceDisconnected()
         {
-            isBound = false;
+            _isBound = false;
         }
 
         private async Task BinderReady()
@@ -215,34 +240,6 @@ namespace Plugin.MediaManager
             var service = binder.GetMediaPlayerService<TService>();
             service.RequestHeaders = RequestHeaders;
             return service;
-        }
-
-        public MediaPlayerStatus GetStatusByCompatValue(int state)
-        {
-            switch (state)
-            {
-                case PlaybackStateCompat.StateFastForwarding:
-                case PlaybackStateCompat.StateRewinding:
-                case PlaybackStateCompat.StateSkippingToNext:
-                case PlaybackStateCompat.StateSkippingToPrevious:
-                case PlaybackStateCompat.StateSkippingToQueueItem:
-                case PlaybackStateCompat.StatePlaying:
-                    return MediaPlayerStatus.Playing;
-
-                case PlaybackStateCompat.StatePaused:
-                    return MediaPlayerStatus.Paused;
-
-                case PlaybackStateCompat.StateConnecting:
-                case PlaybackStateCompat.StateBuffering:
-                    return MediaPlayerStatus.Buffering;
-
-                case PlaybackStateCompat.StateError:
-                case PlaybackStateCompat.StateStopped:
-                    return MediaPlayerStatus.Stopped;
-
-                default:
-                    return MediaPlayerStatus.Stopped;
-            }
-        }
+        }        
     }
 }

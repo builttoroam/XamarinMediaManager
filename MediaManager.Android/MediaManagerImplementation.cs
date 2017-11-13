@@ -22,27 +22,27 @@ namespace Plugin.MediaManager
 
         public override IAudioPlayer AudioPlayer
         {
-            get { return _audioPlayer ?? (_audioPlayer = new AudioPlayerImplementation(MediaSessionManager)); }
-            set { _audioPlayer = value; }
+            get => _audioPlayer ?? (_audioPlayer = new AudioPlayerImplementation(MediaSessionManager));
+            set => _audioPlayer = value;
         }
 
         public override IVideoPlayer VideoPlayer { get; set; } = new VideoPlayerImplementation();
 
         public override IMediaNotificationManager MediaNotificationManager
         {
-            get { return MediaSessionManager.NotificationManager; }
-            set { MediaSessionManager.NotificationManager = value; }
+            get => MediaSessionManager.NotificationManager;
+            set => MediaSessionManager.NotificationManager = value;
         }
 
         public override IMediaExtractor MediaExtractor
         {
-            get { return _mediaExtraxtor ?? (_mediaExtraxtor = new MediaExtractorImplementation(Resources.System, RequestHeaders)); }
-            set { _mediaExtraxtor = value; }
+            get => _mediaExtraxtor ?? (_mediaExtraxtor = new MediaExtractorImplementation(Resources.System, RequestHeaders));
+            set => _mediaExtraxtor = value;
         }
 
         public MediaSessionManager MediaSessionManager
         {
-            get { return _sessionManager ?? (_sessionManager = new MediaSessionManager(Application.Context, this)); }
+            get => _sessionManager ?? (_sessionManager = new MediaSessionManager(Application.Context, this));
             set
             {
                 _sessionManager = value;

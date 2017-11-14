@@ -65,14 +65,8 @@ namespace Plugin.MediaManager
         private MediaServiceBinder binder;
         public MediaServiceBinder Binder
         {
-            get
-            {
-                return binder;
-            }
-            set
-            {
-                binder = value;
-            }
+            get => binder;
+            set => binder = value;
         }
 
         public AudioPlayerBase(MediaSessionManager sessionManager)

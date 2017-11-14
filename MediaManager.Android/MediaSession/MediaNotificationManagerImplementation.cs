@@ -13,27 +13,46 @@ namespace Plugin.MediaManager
 {
     internal class MediaNotificationManagerImplementation : IAndroidMediaNotificationManager
     {
-        // private MediaSessionManagerImplementation _sessionHandler;
         public IMediaQueue MediaQueue { get; set; }
         public MediaSessionCompat.Token SessionToken { get; set; }
-        internal const int _notificationId = 1;
 
-        private Intent _intent;
+        private const int NotificationId = 1;
 
-        private PendingIntent _pendingCancelIntent;
-        private PendingIntent _pendingIntent;
-        private NotificationCompat.MediaStyle _notificationStyle = new NotificationCompat.MediaStyle();
-        private Context _applicationContext;
         private NotificationCompat.Builder _builder;
+        private NotificationCompat.Builder Builder
+        {
+            get
+            {
+                if (_builder == null)
+                {
+                    _notificationStyle.SetMediaSession(SessionToken);
+                    _builder = new NotificationCompat.Builder(_applicationContext)
+                    {
+                        MStyle = _notificationStyle
+                    };
+                }
+
+                return _builder;
+            }
+        }
+
+        private readonly Context _applicationContext;
+        private readonly Intent _intent;
+        private readonly PendingIntent _pendingIntent;
+        private readonly NotificationManagerCompat _notificationManagerCompat;
+        private readonly NotificationCompat.MediaStyle _notificationStyle = new NotificationCompat.MediaStyle();
+
+        private bool _hasNotificationStarted;
 
         public MediaNotificationManagerImplementation(Context applicationContext, Type serviceType)
         {
             _applicationContext = applicationContext;
             _intent = new Intent(_applicationContext, serviceType);
-            var mainActivity =
-                _applicationContext.PackageManager.GetLaunchIntentForPackage(_applicationContext.PackageName);
-            _pendingIntent = PendingIntent.GetActivity(_applicationContext, 0, mainActivity,
-                PendingIntentFlags.UpdateCurrent);
+
+            var mainActivity = _applicationContext.PackageManager.GetLaunchIntentForPackage(_applicationContext.PackageName);
+            _pendingIntent = PendingIntent.GetActivity(_applicationContext, 0, mainActivity, PendingIntentFlags.UpdateCurrent);
+
+            _notificationManagerCompat = NotificationManagerCompat.From(_applicationContext);
         }
 
         /// <summary>
@@ -53,35 +72,29 @@ namespace Plugin.MediaManager
         {
             var icon = (_applicationContext.Resources?.GetIdentifier("xam_mediamanager_notify_ic", "drawable", _applicationContext?.PackageName)).GetValueOrDefault(0);
 
-            _notificationStyle.SetMediaSession(SessionToken);
-            _notificationStyle.SetCancelButtonIntent(_pendingCancelIntent);
-
-            _builder = new NotificationCompat.Builder(_applicationContext)
-            {
-                MStyle = _notificationStyle
-            };
-            _builder.SetSmallIcon(icon != 0 ? icon : _applicationContext.ApplicationInfo.Icon);
-            _builder.SetContentIntent(_pendingIntent);
-            _builder.SetOngoing(mediaIsPlaying);
-            _builder.SetVisibility(1);
+            Builder.SetSmallIcon(icon != 0 ? icon : _applicationContext.ApplicationInfo.Icon);
+            Builder.SetContentIntent(_pendingIntent);
+            Builder.SetOngoing(mediaIsPlaying);
+            Builder.SetVisibility(1);
 
             SetMetadata(mediaFile);
             AddActionButtons(mediaIsPlaying);
-            if (_builder.MActions.Count >= 3)
-                ((NotificationCompat.MediaStyle)(_builder.MStyle)).SetShowActionsInCompactView(0, 1, 2);
-            if (_builder.MActions.Count == 2)
-                ((NotificationCompat.MediaStyle)(_builder.MStyle)).SetShowActionsInCompactView(0, 1);
-            if (_builder.MActions.Count == 1)
-                ((NotificationCompat.MediaStyle)(_builder.MStyle)).SetShowActionsInCompactView(0);
 
-            NotificationManagerCompat.From(_applicationContext)
-                .Notify(_notificationId, _builder.Build());
+            if (Builder.MActions.Count >= 3)
+                ((NotificationCompat.MediaStyle)(Builder.MStyle)).SetShowActionsInCompactView(0, 1, 2);
+            if (Builder.MActions.Count == 2)
+                ((NotificationCompat.MediaStyle)(Builder.MStyle)).SetShowActionsInCompactView(0, 1);
+            if (Builder.MActions.Count == 1)
+                ((NotificationCompat.MediaStyle)(Builder.MStyle)).SetShowActionsInCompactView(0);
+
+            _notificationManagerCompat.Notify(NotificationId, Builder.Build());
+            _hasNotificationStarted = true;
         }
 
         public void StopNotifications()
         {
-            NotificationManagerCompat nm = NotificationManagerCompat.From(_applicationContext);
-            nm.Cancel(_notificationId);
+            _notificationManagerCompat.Cancel(NotificationId);
+            _hasNotificationStarted = false;
         }
 
         public void UpdateNotifications(IMediaFile mediaFile, MediaPlayerStatus status)
@@ -89,14 +102,13 @@ namespace Plugin.MediaManager
             try
             {
                 var isPlaying = status == MediaPlayerStatus.Playing || status == MediaPlayerStatus.Buffering;
-                var isPersistent = status == MediaPlayerStatus.Playing || status == MediaPlayerStatus.Buffering || status == MediaPlayerStatus.Paused;
-                var nm = NotificationManagerCompat.From(_applicationContext);
-                if (nm != null && _builder != null)
+                if (_hasNotificationStarted)
                 {
                     SetMetadata(mediaFile);
                     AddActionButtons(isPlaying);
-                    _builder.SetOngoing(isPersistent);
-                    nm.Notify(_notificationId, _builder.Build());
+                    Builder.SetOngoing(isPlaying);
+
+                    _notificationManagerCompat.Notify(NotificationId, Builder.Build());
                 }
                 else
                 {
@@ -112,10 +124,10 @@ namespace Plugin.MediaManager
 
         private void SetMetadata(IMediaFile mediaFile)
         {
-            _builder.SetContentTitle(mediaFile?.Metadata?.Title ?? string.Empty);
-            _builder.SetContentText(mediaFile?.Metadata?.Artist ?? string.Empty);
-            _builder.SetContentInfo(mediaFile?.Metadata?.Album ?? string.Empty);
-            _builder.SetLargeIcon(mediaFile?.Metadata?.Art as Bitmap);
+            Builder.SetContentTitle(mediaFile?.Metadata?.Title ?? string.Empty);
+            Builder.SetContentText(mediaFile?.Metadata?.Artist ?? string.Empty);
+            Builder.SetContentInfo(mediaFile?.Metadata?.Album ?? string.Empty);
+            Builder.SetLargeIcon(mediaFile?.Metadata?.Art as Bitmap);
         }
 
         private Android.Support.V4.App.NotificationCompat.Action GenerateActionCompat(int icon, string title, string intentAction)
@@ -137,22 +149,22 @@ namespace Plugin.MediaManager
             var canGoPrevious = MediaQueue?.HasPrevious() ?? false;
             var canGoNext = MediaQueue?.HasNext() ?? false;
 
-            _builder.MActions.Clear();
+            Builder.MActions.Clear();
             if (canGoPrevious)
             {
-                _builder.AddAction(GenerateActionCompat(Resource.Drawable.IcMediaPrevious, "Previous",
+                Builder.AddAction(GenerateActionCompat(Resource.Drawable.IcMediaPrevious, "Previous",
                     MediaServiceBase.ActionPrevious));
             }
             // TODO Change this icon to an appropriate one. It's not a correct one (it's the rewind icon) but there's no other option when it comes to android 'baked in' icons
-            _builder.AddAction(GenerateActionCompat(Resource.Drawable.IcMediaRew, "StepBackward", MediaServiceBase.ActionStepBackward));
-            _builder.AddAction(mediaIsPlaying
+            Builder.AddAction(GenerateActionCompat(Resource.Drawable.IcMediaRew, "StepBackward", MediaServiceBase.ActionStepBackward));
+            Builder.AddAction(mediaIsPlaying
                 ? GenerateActionCompat(Resource.Drawable.IcMediaPause, "Pause", MediaServiceBase.ActionPause)
                 : GenerateActionCompat(Resource.Drawable.IcMediaPlay, "Play", MediaServiceBase.ActionPlay));
             // TODO Change this icon to an appropriate one. It's not a correct one (it's the fast forward icon) but there's no other option when it comes to android 'baked in' icons
-            _builder.AddAction(GenerateActionCompat(Resource.Drawable.IcMediaFf, "StepForward", MediaServiceBase.ActionStepForward));
+            Builder.AddAction(GenerateActionCompat(Resource.Drawable.IcMediaFf, "StepForward", MediaServiceBase.ActionStepForward));
             if (canGoNext)
             {
-                _builder.AddAction(GenerateActionCompat(Resource.Drawable.IcMediaNext, "Next",
+                Builder.AddAction(GenerateActionCompat(Resource.Drawable.IcMediaNext, "Next",
                     MediaServiceBase.ActionNext));
             }
         }

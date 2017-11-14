@@ -23,24 +23,45 @@ namespace Plugin.MediaManager
         public MediaSessionCompat.Token SessionToken { get; set; }
 
         private const int NotificationId = 1;
+        private const int MaxNumberOfActionButtons = 5;
 
         private NotificationCompat.Builder _builder;
         private NotificationCompat.Builder Builder
         {
             get
             {
-                if (_builder == null)
+                if (_builder != null)
                 {
-                    _notificationStyle.SetMediaSession(SessionToken);
-                    _builder = new NotificationCompat.Builder(_applicationContext)
-                    {
-                        MStyle = _notificationStyle
-                    };
+                    return _builder;
                 }
+
+                _notificationStyle.SetMediaSession(SessionToken);
+                _builder = new NotificationCompat.Builder(_applicationContext)
+                {
+                    MStyle = _notificationStyle
+                };
 
                 return _builder;
             }
         }
+
+        private Android.Support.V4.App.NotificationCompat.Action _previousButton;
+        private Android.Support.V4.App.NotificationCompat.Action PreviousButton => _previousButton ?? (_previousButton = GenerateActionCompat(Resource.Drawable.IcMediaPrevious, nameof(MediaServiceBase.ActionPrevious), MediaServiceBase.ActionPrevious));
+
+        private Android.Support.V4.App.NotificationCompat.Action _stepBackwardButton;
+        private Android.Support.V4.App.NotificationCompat.Action StepBackwardButton => _stepBackwardButton ?? (_stepBackwardButton = GenerateActionCompat(Resource.Drawable.IcMediaRew, nameof(MediaServiceBase.ActionStepBackward), MediaServiceBase.ActionStepBackward));
+
+        private Android.Support.V4.App.NotificationCompat.Action _playButton;
+        private Android.Support.V4.App.NotificationCompat.Action PlayButton => _playButton ?? (_playButton = GenerateActionCompat(Resource.Drawable.IcMediaPlay, nameof(MediaServiceBase.ActionPlay), MediaServiceBase.ActionPlay));
+
+        private Android.Support.V4.App.NotificationCompat.Action _pauseButton;
+        private Android.Support.V4.App.NotificationCompat.Action PauseButton => _pauseButton ?? (_pauseButton = GenerateActionCompat(Resource.Drawable.IcMediaPause, nameof(MediaServiceBase.ActionPause), MediaServiceBase.ActionPause));
+
+        private Android.Support.V4.App.NotificationCompat.Action _stepForwardButton;
+        private Android.Support.V4.App.NotificationCompat.Action StepForwardButton => _stepForwardButton ?? (_stepForwardButton = GenerateActionCompat(Resource.Drawable.IcMediaFf, nameof(MediaServiceBase.ActionStepBackward), MediaServiceBase.ActionStepForward));
+
+        private Android.Support.V4.App.NotificationCompat.Action _nextButton;
+        private Android.Support.V4.App.NotificationCompat.Action NextButton => _nextButton ?? (_nextButton = GenerateActionCompat(Resource.Drawable.IcMediaNext, nameof(MediaServiceBase.ActionNext), MediaServiceBase.ActionNext));
 
         private readonly Context _applicationContext;
         private readonly Intent _intent;
@@ -140,7 +161,21 @@ namespace Plugin.MediaManager
 
         private void MediaQueueCollectionChanged(object sender, NotifyCollectionChangedEventArgs e)
         {
+            if (e == null)
+            {
+                return;
+            }
 
+            switch (e.Action)
+            {
+                case NotifyCollectionChangedAction.Add:
+                case NotifyCollectionChangedAction.Remove:
+                case NotifyCollectionChangedAction.Reset:
+                    UpdateActionButtonVisibility(PreviousButton, MediaQueue?.HasPrevious() ?? false, 0);
+                    UpdateActionButtonVisibility(NextButton, MediaQueue?.HasNext() ?? false, Builder.MActions.Count + 1);
+                    _notificationManagerCompat.Notify(NotificationId, Builder.Build());
+                    break;
+            }
         }
 
         private void UpdateNotificationDisplayProperties(IMediaFile mediaFile)
@@ -174,24 +209,58 @@ namespace Plugin.MediaManager
 
         private void UpdateNotificationActionButtons(bool mediaIsPlaying)
         {
-            Builder.MActions.Clear();
-            if (MediaQueue?.HasPrevious() ?? false)
-            {
-                Builder.AddAction(GenerateActionCompat(Resource.Drawable.IcMediaPrevious, nameof(MediaServiceBase.ActionPrevious), MediaServiceBase.ActionPrevious));
-            }
-            // TODO Change this icon to an appropriate one. It's not a correct one (it's the rewind icon) but there's no other option when it comes to android 'baked in' icons
-            Builder.AddAction(GenerateActionCompat(Resource.Drawable.IcMediaRew, nameof(MediaServiceBase.ActionStepBackward), MediaServiceBase.ActionStepBackward));
-            Builder.AddAction(mediaIsPlaying ? GenerateActionCompat(Resource.Drawable.IcMediaPause, nameof(MediaServiceBase.ActionPause), MediaServiceBase.ActionPause)
-                                             : GenerateActionCompat(Resource.Drawable.IcMediaPlay, nameof(MediaServiceBase.ActionPlay), MediaServiceBase.ActionPlay));
-            // TODO Change this icon to an appropriate one. It's not a correct one (it's the fast forward icon) but there's no other option when it comes to android 'baked in' icons
-            Builder.AddAction(GenerateActionCompat(Resource.Drawable.IcMediaFf, nameof(MediaServiceBase.ActionStepBackward), MediaServiceBase.ActionStepForward));
-            if (MediaQueue?.HasNext() ?? false)
-            {
-                Builder.AddAction(GenerateActionCompat(Resource.Drawable.IcMediaNext, nameof(MediaServiceBase.ActionNext), MediaServiceBase.ActionNext));
-            }
+            UpdateActionButtonVisibility(PreviousButton, MediaQueue?.HasPrevious() ?? false, 1);
+            UpdateActionButtonVisibility(StepBackwardButton, true, 2);
+            UpdateActionButtonVisibility(PlayButton, !mediaIsPlaying, 3);
+            UpdateActionButtonVisibility(PauseButton, mediaIsPlaying, 3);
+            UpdateActionButtonVisibility(StepForwardButton, true, 4);
+            UpdateActionButtonVisibility(NextButton, MediaQueue?.HasNext() ?? false, 5);
 
             var numberOfButtonsInCompactView = Enumerable.Range(0, Math.Min(Builder.MActions.Count, 3)).ToArray();
             ((NotificationCompat.MediaStyle)(Builder.MStyle)).SetShowActionsInCompactView(numberOfButtonsInCompactView);
+        }
+
+        private void UpdateActionButtonVisibility(Android.Support.V4.App.NotificationCompat.Action actionbutton, bool isVisible, int buttonPositionStartingFromLeft = 1)
+        {
+            if (actionbutton == null || buttonPositionStartingFromLeft > MaxNumberOfActionButtons)
+            {
+                return;
+            }
+
+            var isAlreadyVisible = IsButtonVisible(actionbutton);
+            if (isAlreadyVisible && isVisible ||
+                !isAlreadyVisible && !isVisible)
+            {
+                return;
+            }
+
+            // Show
+            if (!isAlreadyVisible && isVisible)
+            {
+                if (buttonPositionStartingFromLeft - 1 >= Builder.MActions.Count)
+                {
+                    Builder.MActions.Add(actionbutton);
+                }
+                else
+                {
+                    Builder.MActions.Insert(buttonPositionStartingFromLeft - 1, actionbutton);
+                }
+            }
+            // Hide
+            if (isAlreadyVisible && !isVisible)
+            {
+                Builder.MActions.Remove(actionbutton);
+            }
+        }
+
+        private bool IsButtonVisible(Android.Support.V4.App.NotificationCompat.Action actionBbutton)
+        {
+            if (actionBbutton == null)
+            {
+                return false;
+            }
+
+            return Builder.MActions?.Contains(actionBbutton) ?? false;
         }
 
         private async void TrySettingLargeIconBitmap(IMediaFile mediaFile)

@@ -7,6 +7,7 @@ using Android.Support.V4.Media.Session;
 using Plugin.MediaManager.Abstractions;
 using Plugin.MediaManager.Abstractions.Enums;
 using System;
+using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Diagnostics;
 using System.Linq;
@@ -75,7 +76,7 @@ namespace Plugin.MediaManager
         {
             _applicationContext = applicationContext;
             MediaQueue = mediaQueue;
-            MediaQueue.QueueMediaChanged += QueueMediaChanged;
+            MediaQueue.QueueMediaChanged += MediaQueueItemChanged;
             MediaQueue.CollectionChanged += MediaQueueCollectionChanged;
             _intent = new Intent(_applicationContext, serviceType);
 
@@ -84,7 +85,6 @@ namespace Plugin.MediaManager
 
             _notificationManagerCompat = NotificationManagerCompat.From(_applicationContext);
         }
-
 
         /// <summary>
         /// Starts the notification.
@@ -149,7 +149,7 @@ namespace Plugin.MediaManager
             }
         }
 
-        private void QueueMediaChanged(object sender, QueueMediaChangedEventArgs e)
+        private void MediaQueueItemChanged(object sender, QueueMediaChangedEventArgs e)
         {
             if (e?.File == null)
             {
@@ -172,7 +172,7 @@ namespace Plugin.MediaManager
                 case NotifyCollectionChangedAction.Remove:
                 case NotifyCollectionChangedAction.Reset:
                     UpdateActionButtonVisibility(PreviousButton, MediaQueue?.HasPrevious() ?? false, 0);
-                    UpdateActionButtonVisibility(NextButton, MediaQueue?.HasNext() ?? false, Builder.MActions.Count + 1);
+                    UpdateActionButtonVisibility(NextButton, MediaQueue?.HasNext() ?? false, 4);
                     _notificationManagerCompat.Notify(NotificationId, Builder.Build());
                     break;
             }
@@ -209,18 +209,27 @@ namespace Plugin.MediaManager
 
         private void UpdateNotificationActionButtons(bool mediaIsPlaying)
         {
-            UpdateActionButtonVisibility(PreviousButton, MediaQueue?.HasPrevious() ?? false, 1);
-            UpdateActionButtonVisibility(StepBackwardButton, true, 2);
-            UpdateActionButtonVisibility(PlayButton, !mediaIsPlaying, 3);
-            UpdateActionButtonVisibility(PauseButton, mediaIsPlaying, 3);
-            UpdateActionButtonVisibility(StepForwardButton, true, 4);
-            UpdateActionButtonVisibility(NextButton, MediaQueue?.HasNext() ?? false, 5);
+            var hasPreviousActionButton = MediaQueue?.HasPrevious() ?? false;
+            var hasNextActionButton = MediaQueue?.HasNext() ?? false;
 
-            var numberOfButtonsInCompactView = Enumerable.Range(0, Math.Min(Builder.MActions.Count, 3)).ToArray();
-            ((NotificationCompat.MediaStyle)(Builder.MStyle)).SetShowActionsInCompactView(numberOfButtonsInCompactView);
+            UpdateActionButtonVisibility(PreviousButton, hasPreviousActionButton, 0);
+            UpdateActionButtonVisibility(StepBackwardButton, true, 1);
+            UpdateActionButtonVisibility(PlayButton, !mediaIsPlaying, 2);
+            UpdateActionButtonVisibility(PauseButton, mediaIsPlaying, 2);
+            UpdateActionButtonVisibility(StepForwardButton, true, 3);
+            UpdateActionButtonVisibility(NextButton, hasNextActionButton, 4);
+
+            // 0 - Previous or StepBackward
+            var compactVersionActionButtons = new List<int>() { 0 };
+            // 1 or 2 - Play / Pause
+            compactVersionActionButtons.Add(hasPreviousActionButton ? 2 : 1);
+            // last - Next or StepForward
+            compactVersionActionButtons.Add(Builder.MActions.Count - 1);
+
+            ((NotificationCompat.MediaStyle)(Builder.MStyle)).SetShowActionsInCompactView(compactVersionActionButtons.ToArray());
         }
 
-        private void UpdateActionButtonVisibility(Android.Support.V4.App.NotificationCompat.Action actionbutton, bool isVisible, int buttonPositionStartingFromLeft = 1)
+        private void UpdateActionButtonVisibility(Android.Support.V4.App.NotificationCompat.Action actionbutton, bool isVisible, int buttonPositionStartingFromLeft = 0)
         {
             if (actionbutton == null || buttonPositionStartingFromLeft > MaxNumberOfActionButtons)
             {
@@ -237,13 +246,13 @@ namespace Plugin.MediaManager
             // Show
             if (!isAlreadyVisible && isVisible)
             {
-                if (buttonPositionStartingFromLeft - 1 >= Builder.MActions.Count)
+                if (buttonPositionStartingFromLeft >= Builder.MActions.Count)
                 {
                     Builder.MActions.Add(actionbutton);
                 }
                 else
                 {
-                    Builder.MActions.Insert(buttonPositionStartingFromLeft - 1, actionbutton);
+                    Builder.MActions.Insert(buttonPositionStartingFromLeft, actionbutton);
                 }
             }
             // Hide

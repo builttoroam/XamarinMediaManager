@@ -162,8 +162,10 @@ namespace Plugin.MediaManager
             if (AlternateRemoteCallback != null)
                 GetMediaPlayerService().AlternateRemoteCallback = AlternateRemoteCallback;
 
-            //serviceGetMediaPlayerService().CoverReloaded += (object sender, EventArgs e) => { instance.CoverReloaded?.Invoke(sender, e); };
-            GetMediaPlayerService().StatusChanged += (object sender, StatusChangedEventArgs e) => { StatusChanged?.Invoke(this, e); };
+            GetMediaPlayerService().StatusChanged += (object sender, StatusChangedEventArgs e) =>
+            {
+                Status = e.Status;
+            };
             GetMediaPlayerService().PlayingChanged += (sender, args) => { PlayingChanged?.Invoke(this, args); };
             GetMediaPlayerService().BufferingChanged += (sender, args) => { BufferingChanged?.Invoke(this, args); };
             GetMediaPlayerService().MediaFinished += (sender, args) => { MediaFinished?.Invoke(this, args); };
@@ -234,6 +236,6 @@ namespace Plugin.MediaManager
             var service = binder.GetMediaPlayerService<TService>();
             service.RequestHeaders = RequestHeaders;
             return service;
-        }        
+        }
     }
 }

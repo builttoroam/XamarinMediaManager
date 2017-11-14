@@ -7,9 +7,12 @@ using Android.Support.V4.Media.Session;
 using Plugin.MediaManager.Abstractions;
 using Plugin.MediaManager.Abstractions.Enums;
 using System;
+using System.Collections.Specialized;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading.Tasks;
 using Java.Net;
+using Plugin.MediaManager.Abstractions.EventArguments;
 using NotificationCompat = Android.Support.V7.App.NotificationCompat;
 
 namespace Plugin.MediaManager
@@ -45,11 +48,14 @@ namespace Plugin.MediaManager
         private readonly NotificationManagerCompat _notificationManagerCompat;
         private readonly NotificationCompat.MediaStyle _notificationStyle = new NotificationCompat.MediaStyle();
 
-        private bool _hasNotificationStarted;
+        private bool _notificationStarted;
 
-        public MediaNotificationManagerImplementation(Context applicationContext, Type serviceType)
+        public MediaNotificationManagerImplementation(Context applicationContext, IMediaQueue mediaQueue, Type serviceType)
         {
             _applicationContext = applicationContext;
+            MediaQueue = mediaQueue;
+            MediaQueue.QueueMediaChanged += QueueMediaChanged;
+            MediaQueue.CollectionChanged += MediaQueueCollectionChanged;
             _intent = new Intent(_applicationContext, serviceType);
 
             var mainActivity = _applicationContext.PackageManager.GetLaunchIntentForPackage(_applicationContext.PackageName);
@@ -57,6 +63,7 @@ namespace Plugin.MediaManager
 
             _notificationManagerCompat = NotificationManagerCompat.From(_applicationContext);
         }
+
 
         /// <summary>
         /// Starts the notification.
@@ -78,37 +85,35 @@ namespace Plugin.MediaManager
             Builder.SetOngoing(mediaIsPlaying);
             Builder.SetVisibility(1);
 
-            SetMetadata(mediaFile);
-            AddActionButtons(mediaIsPlaying);
-
-            if (Builder.MActions.Count >= 3)
-                ((NotificationCompat.MediaStyle)(Builder.MStyle)).SetShowActionsInCompactView(0, 1, 2);
-            if (Builder.MActions.Count == 2)
-                ((NotificationCompat.MediaStyle)(Builder.MStyle)).SetShowActionsInCompactView(0, 1);
-            if (Builder.MActions.Count == 1)
-                ((NotificationCompat.MediaStyle)(Builder.MStyle)).SetShowActionsInCompactView(0);
+            UpdateNotificationDisplayProperties(mediaFile);
+            UpdateNotificationActionButtons(mediaIsPlaying);
 
             _notificationManagerCompat.Notify(NotificationId, Builder.Build());
-            _hasNotificationStarted = true;
+            _notificationStarted = true;
         }
 
         public void StopNotifications()
         {
             _notificationManagerCompat.Cancel(NotificationId);
-            _hasNotificationStarted = false;
+            _notificationStarted = false;
         }
 
         public void UpdateNotifications(IMediaFile mediaFile, MediaPlayerStatus status)
         {
+            var isPlaying = status == MediaPlayerStatus.Playing || status == MediaPlayerStatus.Buffering;
+
             try
             {
-                var isPlaying = status == MediaPlayerStatus.Playing || status == MediaPlayerStatus.Buffering;
-                if (_hasNotificationStarted || status == MediaPlayerStatus.Stopped)
+                if ((mediaFile == null || status == MediaPlayerStatus.Stopped) && _notificationStarted)
                 {
-                    SetMetadata(mediaFile);
-                    AddActionButtons(isPlaying);
-                    Builder.SetOngoing(isPlaying);
+                    Builder.SetOngoing(false);
+                    return;
+                }
 
+                if (_notificationStarted)
+                {
+                    Builder.SetOngoing(isPlaying);
+                    UpdateNotificationActionButtons(isPlaying);
                     _notificationManagerCompat.Notify(NotificationId, Builder.Build());
                 }
                 else
@@ -123,7 +128,22 @@ namespace Plugin.MediaManager
             }
         }
 
-        private void SetMetadata(IMediaFile mediaFile)
+        private void QueueMediaChanged(object sender, QueueMediaChangedEventArgs e)
+        {
+            if (e?.File == null)
+            {
+                return;
+            }
+
+            UpdateNotificationDisplayProperties(e.File);
+        }
+
+        private void MediaQueueCollectionChanged(object sender, NotifyCollectionChangedEventArgs e)
+        {
+
+        }
+
+        private void UpdateNotificationDisplayProperties(IMediaFile mediaFile)
         {
             if (mediaFile?.Metadata == null)
             {
@@ -141,39 +161,37 @@ namespace Plugin.MediaManager
         {
             _intent.SetAction(intentAction);
 
-            PendingIntentFlags flags = PendingIntentFlags.UpdateCurrent;
+            var flags = PendingIntentFlags.UpdateCurrent;
             if (intentAction.Equals(MediaServiceBase.ActionStop))
+            {
                 flags = PendingIntentFlags.CancelCurrent;
+            }
 
-            PendingIntent pendingIntent = PendingIntent.GetService(_applicationContext, 1, _intent, flags);
+            var pendingIntent = PendingIntent.GetService(_applicationContext, 1, _intent, flags);
 
             return new Android.Support.V4.App.NotificationCompat.Action.Builder(icon, title, pendingIntent).Build();
         }
 
-        private void AddActionButtons(bool mediaIsPlaying)
+        private void UpdateNotificationActionButtons(bool mediaIsPlaying)
         {
-            // Add previous/next button based on media queue
-            var canGoPrevious = MediaQueue?.HasPrevious() ?? false;
-            var canGoNext = MediaQueue?.HasNext() ?? false;
-
             Builder.MActions.Clear();
-            if (canGoPrevious)
+            if (MediaQueue?.HasPrevious() ?? false)
             {
-                Builder.AddAction(GenerateActionCompat(Resource.Drawable.IcMediaPrevious, "Previous",
-                    MediaServiceBase.ActionPrevious));
+                Builder.AddAction(GenerateActionCompat(Resource.Drawable.IcMediaPrevious, nameof(MediaServiceBase.ActionPrevious), MediaServiceBase.ActionPrevious));
             }
             // TODO Change this icon to an appropriate one. It's not a correct one (it's the rewind icon) but there's no other option when it comes to android 'baked in' icons
-            Builder.AddAction(GenerateActionCompat(Resource.Drawable.IcMediaRew, "StepBackward", MediaServiceBase.ActionStepBackward));
-            Builder.AddAction(mediaIsPlaying
-                ? GenerateActionCompat(Resource.Drawable.IcMediaPause, "Pause", MediaServiceBase.ActionPause)
-                : GenerateActionCompat(Resource.Drawable.IcMediaPlay, "Play", MediaServiceBase.ActionPlay));
+            Builder.AddAction(GenerateActionCompat(Resource.Drawable.IcMediaRew, nameof(MediaServiceBase.ActionStepBackward), MediaServiceBase.ActionStepBackward));
+            Builder.AddAction(mediaIsPlaying ? GenerateActionCompat(Resource.Drawable.IcMediaPause, nameof(MediaServiceBase.ActionPause), MediaServiceBase.ActionPause)
+                                             : GenerateActionCompat(Resource.Drawable.IcMediaPlay, nameof(MediaServiceBase.ActionPlay), MediaServiceBase.ActionPlay));
             // TODO Change this icon to an appropriate one. It's not a correct one (it's the fast forward icon) but there's no other option when it comes to android 'baked in' icons
-            Builder.AddAction(GenerateActionCompat(Resource.Drawable.IcMediaFf, "StepForward", MediaServiceBase.ActionStepForward));
-            if (canGoNext)
+            Builder.AddAction(GenerateActionCompat(Resource.Drawable.IcMediaFf, nameof(MediaServiceBase.ActionStepBackward), MediaServiceBase.ActionStepForward));
+            if (MediaQueue?.HasNext() ?? false)
             {
-                Builder.AddAction(GenerateActionCompat(Resource.Drawable.IcMediaNext, "Next",
-                    MediaServiceBase.ActionNext));
+                Builder.AddAction(GenerateActionCompat(Resource.Drawable.IcMediaNext, nameof(MediaServiceBase.ActionNext), MediaServiceBase.ActionNext));
             }
+
+            var numberOfButtonsInCompactView = Enumerable.Range(0, Math.Min(Builder.MActions.Count, 3)).ToArray();
+            ((NotificationCompat.MediaStyle)(Builder.MStyle)).SetShowActionsInCompactView(numberOfButtonsInCompactView);
         }
 
         private async void TrySettingLargeIconBitmap(IMediaFile mediaFile)

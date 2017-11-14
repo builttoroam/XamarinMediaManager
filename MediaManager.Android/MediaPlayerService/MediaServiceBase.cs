@@ -360,7 +360,6 @@ namespace Plugin.MediaManager
                 ManuallyPaused = false;
                 SessionManager.UpdatePlaybackState(PlaybackStateCompat.StatePlaying, Position.Seconds);
                 SessionManager.UpdateMetadata(mediaFile);
-                SessionManager.NotificationManager.StartNotification(mediaFile);
                 CurrentFile = mediaFile;
                 Resume();
                 return await Task.FromResult(true);

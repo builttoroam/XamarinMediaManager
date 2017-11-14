@@ -137,24 +137,21 @@ namespace MediaForms
                     Metadata = new MediaFileMetadata
                     {
                         Title = "Test2",
-                        DisplayIconUri = "https://d15mj6e6qmt1na.cloudfront.net/i/8457198.jpg"
+                        ArtUri = "https://d15mj6e6qmt1na.cloudfront.net/i/8457198.jpg"
                     }
                 },
                 new MediaFile
                 {
-                    Url =
-                        "https://audioboom.com/posts/5770261-ep-306-a-theory-of-evolution.mp3?source=rss&amp;stitched=1",
+                    Url ="https://audioboom.com/posts/5770261-ep-306-a-theory-of-evolution.mp3?source=rss&amp;stitched=1",
                     Type = MediaFileType.Audio,
                     Metadata = new MediaFileMetadata
                     {
                         Title = "Test3",
-                        DisplayIconUri = "https://d15mj6e6qmt1na.cloudfront.net/i/30739475.jpg"
+                        ArtUri = "https://d15mj6e6qmt1na.cloudfront.net/i/30739475.jpg"
                     }
                 }
             };
-            // Follow-Up 305
-            // Ep. 306: A Theory of Evolution
-            // Ep. 304: The 4th Dimension
+
             await CrossMediaManager.Current.Play(list);
 
             foreach (var child in PlaylistActionContainer.Children)

@@ -288,9 +288,9 @@ namespace Plugin.MediaManager
                     }
                     break;
             }
-            if (!string.IsNullOrWhiteSpace(mediaFile.Metadata?.DisplayIconUri))
+            if (!string.IsNullOrWhiteSpace(mediaFile.Metadata?.ArtUri))
             {
-                playbaItemDisplayProperties.Thumbnail = RandomAccessStreamReference.CreateFromUri(new Uri(mediaFile.Metadata.DisplayIconUri));
+                playbaItemDisplayProperties.Thumbnail = RandomAccessStreamReference.CreateFromUri(new Uri(mediaFile.Metadata.ArtUri));
             }
             playbackItem.ApplyDisplayProperties(playbaItemDisplayProperties);
         }

@@ -7,6 +7,9 @@ using Android.Support.V4.Media.Session;
 using Plugin.MediaManager.Abstractions;
 using Plugin.MediaManager.Abstractions.Enums;
 using System;
+using System.Diagnostics;
+using System.Threading.Tasks;
+using Java.Net;
 using NotificationCompat = Android.Support.V7.App.NotificationCompat;
 
 namespace Plugin.MediaManager
@@ -70,9 +73,7 @@ namespace Plugin.MediaManager
         /// </summary>
         public void StartNotification(IMediaFile mediaFile, bool mediaIsPlaying, bool canBeRemoved)
         {
-            var icon = (_applicationContext.Resources?.GetIdentifier("xam_mediamanager_notify_ic", "drawable", _applicationContext?.PackageName)).GetValueOrDefault(0);
-
-            Builder.SetSmallIcon(icon != 0 ? icon : _applicationContext.ApplicationInfo.Icon);
+            Builder.SetSmallIcon(_applicationContext.ApplicationInfo.Icon);
             Builder.SetContentIntent(_pendingIntent);
             Builder.SetOngoing(mediaIsPlaying);
             Builder.SetVisibility(1);
@@ -102,7 +103,7 @@ namespace Plugin.MediaManager
             try
             {
                 var isPlaying = status == MediaPlayerStatus.Playing || status == MediaPlayerStatus.Buffering;
-                if (_hasNotificationStarted)
+                if (_hasNotificationStarted || status == MediaPlayerStatus.Stopped)
                 {
                     SetMetadata(mediaFile);
                     AddActionButtons(isPlaying);
@@ -124,10 +125,16 @@ namespace Plugin.MediaManager
 
         private void SetMetadata(IMediaFile mediaFile)
         {
-            Builder.SetContentTitle(mediaFile?.Metadata?.Title ?? string.Empty);
-            Builder.SetContentText(mediaFile?.Metadata?.Artist ?? string.Empty);
-            Builder.SetContentInfo(mediaFile?.Metadata?.Album ?? string.Empty);
-            Builder.SetLargeIcon(mediaFile?.Metadata?.Art as Bitmap);
+            if (mediaFile?.Metadata == null)
+            {
+                return;
+            }
+
+            Builder.SetContentTitle(mediaFile.Metadata.Title ?? string.Empty);
+            Builder.SetContentText(mediaFile.Metadata.Artist ?? string.Empty);
+            Builder.SetContentInfo(mediaFile.Metadata.Album ?? string.Empty);
+
+            TrySettingLargeIconBitmap(mediaFile);
         }
 
         private Android.Support.V4.App.NotificationCompat.Action GenerateActionCompat(int icon, string title, string intentAction)
@@ -167,6 +174,39 @@ namespace Plugin.MediaManager
                 Builder.AddAction(GenerateActionCompat(Resource.Drawable.IcMediaNext, "Next",
                     MediaServiceBase.ActionNext));
             }
+        }
+
+        private async void TrySettingLargeIconBitmap(IMediaFile mediaFile)
+        {
+            var iconBitmap = mediaFile.Metadata.Art as Bitmap;
+            if (iconBitmap == null)
+            {
+                if (!string.IsNullOrWhiteSpace(mediaFile.Metadata.ArtUri))
+                {
+                    try
+                    {
+                        var url = new URL(mediaFile.Metadata.ArtUri);
+                        iconBitmap = await Task.Run(() =>
+                        {
+                            using (var bmpStream = url.OpenStream())
+                            {
+                                return BitmapFactory.DecodeStream(bmpStream);
+                            }
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine(ex.Message);
+                    }
+                }
+            }
+
+            if (iconBitmap == null)
+            {
+                return;
+            }
+
+            Builder.SetLargeIcon(iconBitmap);
         }
     }
 }

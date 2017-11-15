@@ -1,3 +1,4 @@
+using System;
 using Plugin.MediaManager.Abstractions.Enums;
 using Plugin.MediaManager.Abstractions.EventArguments;
 
@@ -10,6 +11,11 @@ namespace Plugin.MediaManager.Abstractions
     /// </summary>
     public interface IMediaFile
     {
+        /// <summary>
+        /// Unique identificator of the media file
+        /// </summary>
+        Guid Id { get; set; }
+
         /// <summary>
         /// Indicator for player which type of file it should play
         /// </summary>

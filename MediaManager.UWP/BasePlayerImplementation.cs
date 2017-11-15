@@ -23,6 +23,8 @@ namespace Plugin.MediaManager
         private readonly IMediaPlyerPlaybackController _mediaPlyerPlaybackController;
         private readonly IVolumeManager _volumeManager;
 
+        private readonly IDictionary<Guid, MediaPlaybackItem> _playbackItemByMediaFileId = new Dictionary<Guid, MediaPlaybackItem>();
+
         protected readonly MediaPlayer Player;
 
         protected readonly MediaPlaybackList PlaybackList = new MediaPlaybackList();
@@ -89,12 +91,17 @@ namespace Plugin.MediaManager
 
         protected MediaPlaybackItem RetrievePlaylistItem(IMediaFile mediaFile)
         {
-            if (string.IsNullOrWhiteSpace(mediaFile?.Url))
+            if (mediaFile == null)
             {
                 return null;
             }
 
-            return PlaybackList.Items.FirstOrDefault(i => i.Source?.Uri?.AbsoluteUri == mediaFile.Url);
+            if (_playbackItemByMediaFileId.ContainsKey(mediaFile.Id))
+            {
+                return _playbackItemByMediaFileId[mediaFile.Id];
+            }
+
+            return null;
         }
 
         private async void MediaQueueCollectionChanged(object sender, NotifyCollectionChangedEventArgs e)
@@ -110,7 +117,7 @@ namespace Plugin.MediaManager
                     await HandleMediaQueueAddAction(e);
                     break;
                 case NotifyCollectionChangedAction.Move:
-                    // The reality is that this scenario is never going to happen. Even when we re-order or shuffle the list is being regenerated (Reset)
+                    // The reality is that this scenario is never going to happen. Even when we re-order or shuffle, the list is being regenerated (Reset)
                     break;
                 case NotifyCollectionChangedAction.Remove:
                     HandleMediaQueueRemoveAction(e);
@@ -151,7 +158,10 @@ namespace Plugin.MediaManager
 
                 foreach (var newMediaFile in newMediaFiles)
                 {
-                    PlaybackList.Items.Add(await CreateMediaPlaybackItem(newMediaFile));
+                    var newPlaybackItem = await CreateMediaPlaybackItem(newMediaFile);
+
+                    PlaybackList.Items.Add(newPlaybackItem);
+                    _playbackItemByMediaFileId.Add(newMediaFile.Id, newPlaybackItem);
                 }
             }
         }
@@ -193,9 +203,12 @@ namespace Plugin.MediaManager
                     }
 
                     PlaybackList.Items.RemoveAt(mediaFileInPlaylistIndex);
+                    _playbackItemByMediaFileId.Remove(oldMediaFile.Id);
 
                     var newPlaybackItem = await CreateMediaPlaybackItem(newMediaFile);
+
                     PlaybackList.Items.Insert(mediaFileInPlaylistIndex, newPlaybackItem);
+                    _playbackItemByMediaFileId.Add(oldMediaFile.Id, newPlaybackItem);
                 }
             }
             catch (Exception ex)
@@ -229,6 +242,7 @@ namespace Plugin.MediaManager
                     }
 
                     PlaybackList.Items.RemoveAt(mediaFileInPlaylistIndex);
+                    _playbackItemByMediaFileId.Remove(mediaFile.Id);
                     if (PlaybackList.Items.Any() && isMediaFileInPlaylistIndexCurrentlyPlaying)
                     {
                         if (mediaFileInPlaylistIndex == 0)
@@ -257,10 +271,13 @@ namespace Plugin.MediaManager
             }
 
             PlaybackList.Items.Clear();
+            _playbackItemByMediaFileId.Clear();
             foreach (var mediaFile in mediaFiles)
             {
                 var newPlaybackItem = await CreateMediaPlaybackItem(mediaFile);
+
                 PlaybackList.Items.Add(newPlaybackItem);
+                _playbackItemByMediaFileId.Add(mediaFile.Id, newPlaybackItem);
             }
         }
 

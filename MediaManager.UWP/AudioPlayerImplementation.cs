@@ -171,7 +171,10 @@ namespace Plugin.MediaManager
                     _currentMediaFile = mediaFile;
                     PlaybackList.Items.Clear();
                     var mediaPlaybackItem = await CreateMediaPlaybackItem(mediaFile);
-                    PlaybackList.Items.Add(mediaPlaybackItem);
+                    if (mediaPlaybackItem != null)
+                    {
+                        PlaybackList.Items.Add(mediaPlaybackItem);
+                    }
                 }
                 else
                 {

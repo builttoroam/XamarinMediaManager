@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using System.Text;
@@ -246,7 +247,10 @@ namespace Plugin.MediaManager
 
             await Task.Run(() =>
             {
-                CurrentItem?.Seek(CMTime.FromSeconds(position.TotalSeconds, 1));
+                CurrentItem?.Seek(CMTime.FromSeconds(position.TotalSeconds, 1), finished =>
+                {
+                    Debug.WriteLine($"Seeking to {position.Minutes} {position.Seconds} finished? {finished}");
+                });
             });
         }
 
@@ -374,6 +378,6 @@ namespace Plugin.MediaManager
         private void HandleFinshedPlaying(NSNotification notification)
         {
             MediaFinished?.Invoke(this, new MediaFinishedEventArgs(_currentMediaFile));
-        }        
+        }
     }
 }

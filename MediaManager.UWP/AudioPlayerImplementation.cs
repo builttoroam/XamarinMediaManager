@@ -182,8 +182,10 @@ namespace Plugin.MediaManager
                     var mediaToPlayIndex = PlaybackList.Items.IndexOf(mediaToPlay);
                     if (mediaToPlayIndex < 0)
                     {
-                        Debug.WriteLine($"Specified media file not present in the playback list. Media file title {mediaFile?.Metadata?.Title}");
+                        Debug.WriteLine($"Specified media file not present in the playback list. Media file title: {mediaFile?.Metadata?.Title}");
+                        return;
                     }
+
                     if (mediaToPlayIndex != PlaybackList.CurrentItemIndex)
                     {
                         PlaybackList.MoveTo((uint)mediaToPlayIndex);

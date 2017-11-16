@@ -17,21 +17,24 @@ namespace Plugin.MediaManager
     public class AudioPlayerImplementation : NSObject, IAudioPlayer
     {
         private readonly IVolumeManager _volumeManager;
-
         private readonly IVersionHelper _versionHelper;
 
         private IMediaFile _currentMediaFile;
-
-        public static readonly NSString StatusObservationContext = new NSString("Status");
-
-        public static readonly NSString RateObservationContext = new NSString("Rate");
-
-        public static readonly NSString LoadedTimeRangesObservationContext = new NSString("TimeRanges");
-
-        private AVPlayer _player;
         private MediaPlayerStatus _status;
 
-        public Dictionary<string, string> RequestHeaders { get; set; }
+        private NSObject _periodicTimeObserverObject;
+
+        private AVPlayer _player;
+        private AVPlayer Player
+        {
+            get
+            {
+                if (_player == null)
+                    InitializePlayer();
+
+                return _player;
+            }
+        }
 
         public AudioPlayerImplementation(IVolumeManager volumeManager)
         {
@@ -55,29 +58,17 @@ namespace Plugin.MediaManager
             _volumeManager.VolumeChanged += VolumeManagerOnVolumeChanged;
         }
 
-        private void VolumeManagerOnVolumeChanged(object sender, VolumeChangedEventArgs volumeChangedEventArgs)
-        {
-            
-            Player.Volume = (float)volumeChangedEventArgs.NewVolume / 100;
-            Player.Muted = volumeChangedEventArgs.Muted;
-        }
+        public static readonly NSString StatusObservationContext = new NSString("Status");
+        public static readonly NSString RateObservationContext = new NSString("Rate");
+        public static readonly NSString LoadedTimeRangesObservationContext = new NSString("TimeRanges");
 
-        private AVPlayer Player
-        {
-            get
-            {
-                if (_player == null)
-                    InitializePlayer();
-                
-                return _player;
-            }
-        }
+        public event StatusChangedEventHandler StatusChanged;
+        public event PlayingChangedEventHandler PlayingChanged;
+        public event BufferingChangedEventHandler BufferingChanged;
+        public event MediaFinishedEventHandler MediaFinished;
+        public event MediaFailedEventHandler MediaFailed;
 
-        private NSObject PeriodicTimeObserverObject;
-
-        private AVPlayerItem CurrentItem => Player.CurrentItem;
-
-        private NSUrl nsUrl { get; set; }
+        public Dictionary<string, string> RequestHeaders { get; set; }
 
         public float Rate
         {
@@ -149,39 +140,9 @@ namespace Plugin.MediaManager
             }
         }
 
-        public async Task Stop()
-        {
-            await Task.Run(() =>
-            {
-                if (CurrentItem == null)
-                    return;
-
-                if (Player.Rate != 0.0)
-                    Player.Pause();
-
-                CurrentItem.Seek(CMTime.FromSeconds(0d, 1));
-
-                Status = MediaPlayerStatus.Stopped;
-            });
-        }
-
-        public async Task Pause()
-        {
-            await Task.Run(() =>
-            {
-                Status = MediaPlayerStatus.Paused;
-
-                if (CurrentItem == null)
-                    return;
-
-                if (Player.Rate != 0.0)
-                    Player.Pause();
-            });
-        }
-
         public MediaPlayerStatus Status
         {
-            get { return _status; }
+            get => _status;
             private set
             {
                 _status = value;
@@ -189,67 +150,32 @@ namespace Plugin.MediaManager
             }
         }
 
-        public event StatusChangedEventHandler StatusChanged;
-        public event PlayingChangedEventHandler PlayingChanged;
-        public event BufferingChangedEventHandler BufferingChanged;
-        public event MediaFinishedEventHandler MediaFinished;
-        public event MediaFailedEventHandler MediaFailed;
+        private AVPlayerItem CurrentItem => Player.CurrentItem;
 
-        public async Task Seek(TimeSpan position)
+        private NSUrl NsUrl { get; set; }
+
+        public override void ObserveValue(NSString keyPath, NSObject ofObject, NSDictionary change, IntPtr context)
         {
-            await Task.Run(() => { CurrentItem?.Seek(CMTime.FromSeconds(position.TotalSeconds, 1)); });
-        }
+            Console.WriteLine("Observer triggered for {0}", keyPath);
 
-        private void InitializePlayer()
-        {
-            if (_player != null)
+            switch (keyPath)
             {
-                _player.RemoveTimeObserver(PeriodicTimeObserverObject);
-                _player.RemoveObserver(this, (NSString)"rate", RateObservationContext.Handle);
+                case "status":
+                    ObserveStatus();
+                    return;
 
-                _player.Dispose();
+                case "loadedTimeRanges":
+                    ObserveLoadedTimeRanges();
+                    return;
+
+                case "rate":
+                    ObserveRate();
+                    return;
+
+                default:
+                    Console.WriteLine("Observer triggered for {0} not resolved ...", keyPath);
+                    return;
             }
-
-            _player = new AVPlayer();
-
-            if (_versionHelper.SupportsAutomaticWaitPlayerProperty) {
-                _player.AutomaticallyWaitsToMinimizeStalling = false;
-            }
-
-#if __IOS__ || __TVOS__
-            var avSession = AVAudioSession.SharedInstance();
-
-            // By setting the Audio Session category to AVAudioSessionCategorPlayback, audio will continue to play when the silent switch is enabled, or when the screen is locked.
-            avSession.SetCategory(AVAudioSessionCategory.Playback);
-
-
-            NSError activationError = null;
-            avSession.SetActive(true, out activationError);
-            if (activationError != null)
-                Console.WriteLine("Could not activate audio session {0}", activationError.LocalizedDescription);
-#endif
-            Player.AddObserver(this, (NSString)"rate", NSKeyValueObservingOptions.New |
-                                                          NSKeyValueObservingOptions.Initial,
-                                   RateObservationContext.Handle);
-
-            PeriodicTimeObserverObject = Player.AddPeriodicTimeObserver(new CMTime(1, 4), DispatchQueue.MainQueue, delegate
-            {
-                if (CurrentItem.Duration.IsInvalid || CurrentItem.Duration.IsIndefinite || double.IsNaN(CurrentItem.Duration.Seconds))
-                {
-                    PlayingChanged?.Invoke(this, new PlayingChangedEventArgs(0, Position, Duration));
-                }
-                else
-                {
-                    var totalDuration = TimeSpan.FromSeconds(CurrentItem.Duration.Seconds);
-                    var totalProgress = Position.TotalMilliseconds /
-                                        totalDuration.TotalMilliseconds;
-                    PlayingChanged?.Invoke(this, new PlayingChangedEventArgs(
-                        !double.IsInfinity(totalProgress) ? totalProgress : 0,
-                        Position,
-                        Duration
-                    ));
-                }
-            });
         }
 
         public async Task Play(IMediaFile mediaFile = null)
@@ -266,7 +192,7 @@ namespace Plugin.MediaManager
 
             if (mediaFile != null)
             {
-                nsUrl = MediaFileUrlHelper.GetUrlFor(mediaFile);
+                NsUrl = MediaFileUrlHelper.GetUrlFor(mediaFile);
                 _currentMediaFile = mediaFile;
             }
 
@@ -276,7 +202,7 @@ namespace Plugin.MediaManager
 
                 Status = MediaPlayerStatus.Buffering;
 
-                var playerItem = GetPlayerItem(nsUrl);
+                var playerItem = GetPlayerItem(NsUrl);
 
                 CurrentItem?.RemoveObserver(this, new NSString("status"));
 
@@ -308,8 +234,103 @@ namespace Plugin.MediaManager
             await Task.CompletedTask;
         }
 
-        private AVPlayerItem GetPlayerItem(NSUrl url) {
+        public async Task Stop()
+        {
+            await Task.Run(() =>
+            {
+                if (CurrentItem == null)
+                    return;
 
+                if (Player.Rate != 0.0)
+                    Player.Pause();
+
+                CurrentItem.Seek(CMTime.FromSeconds(0d, 1));
+
+                Status = MediaPlayerStatus.Stopped;
+            });
+        }
+
+        public async Task Pause()
+        {
+            await Task.Run(() =>
+            {
+                Status = MediaPlayerStatus.Paused;
+
+                if (CurrentItem == null)
+                    return;
+
+                if (Player.Rate != 0.0)
+                    Player.Pause();
+            });
+        }
+
+        public async Task Seek(TimeSpan position)
+        {
+            await Task.Run(() => { CurrentItem?.Seek(CMTime.FromSeconds(position.TotalSeconds, 1)); });
+        }
+
+        private void InitializePlayer()
+        {
+            if (_player != null)
+            {
+                _player.RemoveTimeObserver(_periodicTimeObserverObject);
+                _player.RemoveObserver(this, (NSString)"rate", RateObservationContext.Handle);
+
+                _player.Dispose();
+            }
+
+            _player = new AVPlayer();
+
+            if (_versionHelper.SupportsAutomaticWaitPlayerProperty)
+            {
+                _player.AutomaticallyWaitsToMinimizeStalling = false;
+            }
+
+#if __IOS__ || __TVOS__
+            var avSession = AVAudioSession.SharedInstance();
+
+            // By setting the Audio Session category to AVAudioSessionCategorPlayback, audio will continue to play when the silent switch is enabled, or when the screen is locked.
+            avSession.SetCategory(AVAudioSessionCategory.Playback);
+
+
+            NSError activationError = null;
+            avSession.SetActive(true, out activationError);
+            if (activationError != null)
+                Console.WriteLine("Could not activate audio session {0}", activationError.LocalizedDescription);
+#endif
+            Player.AddObserver(this, (NSString)"rate", NSKeyValueObservingOptions.New |
+                                                          NSKeyValueObservingOptions.Initial,
+                                   RateObservationContext.Handle);
+
+            _periodicTimeObserverObject = Player.AddPeriodicTimeObserver(new CMTime(1, 4), DispatchQueue.MainQueue, delegate
+            {
+                if (CurrentItem.Duration.IsInvalid || CurrentItem.Duration.IsIndefinite || double.IsNaN(CurrentItem.Duration.Seconds))
+                {
+                    PlayingChanged?.Invoke(this, new PlayingChangedEventArgs(0, Position, Duration));
+                }
+                else
+                {
+                    var totalDuration = TimeSpan.FromSeconds(CurrentItem.Duration.Seconds);
+                    var totalProgress = Position.TotalMilliseconds /
+                                        totalDuration.TotalMilliseconds;
+                    PlayingChanged?.Invoke(this, new PlayingChangedEventArgs(
+                        !double.IsInfinity(totalProgress) ? totalProgress : 0,
+                        Position,
+                        Duration
+                    ));
+                }
+            });
+        }
+
+        private void VolumeManagerOnVolumeChanged(object sender, VolumeChangedEventArgs volumeChangedEventArgs)
+        {
+
+            Player.Volume = (float)volumeChangedEventArgs.NewVolume / 100;
+            Player.Muted = volumeChangedEventArgs.Muted;
+        }
+
+        private AVPlayerItem GetPlayerItem(NSUrl url)
+        {
             AVAsset asset;
 
             if (RequestHeaders != null && RequestHeaders.Any())
@@ -326,30 +347,6 @@ namespace Plugin.MediaManager
             var playerItem = AVPlayerItem.FromAsset(asset);
 
             return playerItem;
-        }
-
-        public override void ObserveValue(NSString keyPath, NSObject ofObject, NSDictionary change, IntPtr context)
-        {
-            Console.WriteLine("Observer triggered for {0}", keyPath);
-
-            switch (keyPath)
-            {
-                case "status":
-                    ObserveStatus();
-                    return;
-
-                case "loadedTimeRanges":
-                    ObserveLoadedTimeRanges();
-                    return;
-
-                case "rate":
-                    ObserveRate();
-                    return;
-
-                default:
-                    Console.WriteLine("Observer triggered for {0} not resolved ...", keyPath);
-                    return;
-            }
         }
 
         private void ObserveStatus()

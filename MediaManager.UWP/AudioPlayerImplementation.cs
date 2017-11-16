@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -179,6 +180,10 @@ namespace Plugin.MediaManager
                 else
                 {
                     var mediaToPlayIndex = PlaybackList.Items.IndexOf(mediaToPlay);
+                    if (mediaToPlayIndex < 0)
+                    {
+                        Debug.WriteLine($"Specified media file not present in the playback list. Media file title {mediaFile?.Metadata?.Title}");
+                    }
                     if (mediaToPlayIndex != PlaybackList.CurrentItemIndex)
                     {
                         PlaybackList.MoveTo((uint)mediaToPlayIndex);

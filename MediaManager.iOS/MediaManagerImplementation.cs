@@ -1,8 +1,8 @@
-﻿using Plugin.MediaManager.Abstractions;
+using Plugin.MediaManager.Abstractions;
 
 namespace Plugin.MediaManager
 {
-    public class MediaManagerImplementation: MediaManagerAppleBase
+    public class MediaManagerImplementation : MediaManagerAppleBase
     {
         public MediaManagerImplementation()
         {

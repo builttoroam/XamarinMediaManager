@@ -8,6 +8,7 @@ using AVFoundation;
 using CoreFoundation;
 using CoreMedia;
 using Foundation;
+using MediaPlayer;
 using Plugin.MediaManager.Abstractions;
 using Plugin.MediaManager.Abstractions.Enums;
 using Plugin.MediaManager.Abstractions.EventArguments;
@@ -373,6 +374,6 @@ namespace Plugin.MediaManager
         private void HandleFinshedPlaying(NSNotification notification)
         {
             MediaFinished?.Invoke(this, new MediaFinishedEventArgs(_currentMediaFile));
-        }
+        }        
     }
 }

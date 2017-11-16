@@ -267,25 +267,8 @@ namespace Plugin.MediaManager
                 Console.WriteLine("Could not activate audio session {0}", activationError.LocalizedDescription);
             }
 #endif
-            _player.AddObserver(this, (NSString)"rate", NSKeyValueObservingOptions.New | NSKeyValueObservingOptions.Initial, _rateObservationKey.Handle);
-            _player.AddPeriodicTimeObserver(new CMTime(1, 4), DispatchQueue.MainQueue, delegate
-            {
-                if (CurrentItem.Duration.IsInvalid || CurrentItem.Duration.IsIndefinite || double.IsNaN(CurrentItem.Duration.Seconds))
-                {
-                    PlayingChanged?.Invoke(this, new PlayingChangedEventArgs(0, Position, Duration));
-                }
-                else
-                {
-                    var totalDuration = TimeSpan.FromSeconds(CurrentItem.Duration.Seconds);
-                    var totalProgress = Position.TotalMilliseconds /
-                                        totalDuration.TotalMilliseconds;
-                    PlayingChanged?.Invoke(this, new PlayingChangedEventArgs(
-                        !double.IsInfinity(totalProgress) ? totalProgress : 0,
-                        Position,
-                        Duration
-                    ));
-                }
-            });
+            _player.AddObserver(this, _rateObservationKey, NSKeyValueObservingOptions.New | NSKeyValueObservingOptions.Initial, _rateObservationKey.Handle);
+            _player.AddPeriodicTimeObserver(new CMTime(1, 4), DispatchQueue.MainQueue, HandleTimeChange);
         }
 
         private void VolumeManagerOnVolumeChanged(object sender, VolumeChangedEventArgs volumeChangedEventArgs)
@@ -310,6 +293,27 @@ namespace Plugin.MediaManager
 
             var playerItem = AVPlayerItem.FromAsset(asset);
             return playerItem;
+        }
+
+        private void HandleTimeChange(CMTime time)
+        {
+            if (CurrentItem.Duration.IsInvalid || CurrentItem.Duration.IsIndefinite || double.IsNaN(CurrentItem.Duration.Seconds))
+            {
+                PlayingChanged?.Invoke(this, new PlayingChangedEventArgs(0, Position, Duration));
+            }
+            else
+            {
+                // Prevent potential division by 0
+                if (CurrentItem.Duration.Seconds <= 0)
+                {
+                    return;
+                }
+
+                var totalDuration = TimeSpan.FromSeconds(CurrentItem.Duration.Seconds);
+                var totalProgress = Position.TotalMilliseconds / totalDuration.TotalMilliseconds;
+
+                PlayingChanged?.Invoke(this, new PlayingChangedEventArgs(!double.IsInfinity(totalProgress) ? totalProgress : 0, Position, Duration));
+            }
         }
 
         private void HandlePlaybackStatusChange()

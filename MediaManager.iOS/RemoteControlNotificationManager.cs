@@ -43,8 +43,8 @@ namespace Plugin.MediaManager
         {
             _playCommandUnsubscribeToken = MPRemoteCommandCenter.Shared.PlayCommand.AddTarget(OnPlayCommand);
             _pauseCommandUnsubscribeToken = MPRemoteCommandCenter.Shared.PauseCommand.AddTarget(OnPauseCommand);
-            _skipForwardCommandUnsubscribeToken = MPRemoteCommandCenter.Shared.SkipForwardCommand.AddTarget(OnSkipCommand);
-            _skipBackwardCommandUnsubscribeToken = MPRemoteCommandCenter.Shared.SkipBackwardCommand.AddTarget(OnSkipCommand);
+            _skipForwardCommandUnsubscribeToken = MPRemoteCommandCenter.Shared.SkipForwardCommand.AddTarget(OnSkipForwardCommand);
+            _skipBackwardCommandUnsubscribeToken = MPRemoteCommandCenter.Shared.SkipBackwardCommand.AddTarget(OnSkipBackwardCommand);
             _changePlaybackPositionCommandUnsubscribeToken = MPRemoteCommandCenter.Shared.ChangePlaybackPositionCommand.AddTarget(OnChangePlaybackPositionCommand);
             _changePlaybackPositionCommandUnsubscribeToken = MPRemoteCommandCenter.Shared.NextTrackCommand.AddTarget(OnNextCommand);
             _changePlaybackPositionCommandUnsubscribeToken = MPRemoteCommandCenter.Shared.PreviousTrackCommand.AddTarget(OnPreviousCommand);
@@ -93,18 +93,21 @@ namespace Plugin.MediaManager
             return MPRemoteCommandHandlerStatus.Success;
         }
 
-        private MPRemoteCommandHandlerStatus OnSkipCommand(MPRemoteCommandEvent e)
+        private MPRemoteCommandHandlerStatus OnSkipForwardCommand(MPRemoteCommandEvent e)
         {
             if (e is MPSkipIntervalCommandEvent skip)
             {
-                if (skip.Interval > 0)
-                {
-                    _playbackController.StepForward();
-                }
-                else
-                {
-                    _playbackController.StepBackward();
-                }
+                _playbackController.StepForward();
+            }
+
+            return MPRemoteCommandHandlerStatus.Success;
+        }
+
+        private MPRemoteCommandHandlerStatus OnSkipBackwardCommand(MPRemoteCommandEvent e)
+        {
+            if (e is MPSkipIntervalCommandEvent skip)
+            {
+                _playbackController.StepBackward();
             }
 
             return MPRemoteCommandHandlerStatus.Success;

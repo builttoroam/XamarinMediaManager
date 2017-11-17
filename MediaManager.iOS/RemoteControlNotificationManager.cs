@@ -34,8 +34,6 @@ namespace Plugin.MediaManager
             MPRemoteCommandCenter.Shared.SkipForwardCommand.PreferredIntervals = new double[] { _playbackController.StepSeconds };
             MPRemoteCommandCenter.Shared.SkipBackwardCommand.Enabled = true;
             MPRemoteCommandCenter.Shared.SkipBackwardCommand.PreferredIntervals = new double[] { _playbackController.StepSeconds };
-            MPRemoteCommandCenter.Shared.NextTrackCommand.Enabled = true;
-            MPRemoteCommandCenter.Shared.PreviousTrackCommand.Enabled = true;
             MPRemoteCommandCenter.Shared.ChangePlaybackPositionCommand.Enabled = true;
         }
 

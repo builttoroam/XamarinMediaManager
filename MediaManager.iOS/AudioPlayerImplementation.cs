@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
@@ -24,7 +25,9 @@ namespace Plugin.MediaManager
         private readonly NSString _playbackLikelyToKeepUpKey = new NSString(Constants.PlaybackLikelyToKeepUpKey);
         private readonly NSString _playbackBufferFullKey = new NSString(Constants.PlaybackBufferFullKey);
 
-        private readonly AVPlayer _player = new AVPlayer();
+        private readonly AVQueuePlayer _player = new AVQueuePlayer();
+
+        private readonly IMediaQueue _mediaQueue;
         private readonly IVolumeManager _volumeManager;
         private readonly IVersionHelper _versionHelper;
 
@@ -33,10 +36,13 @@ namespace Plugin.MediaManager
 
         private bool _justFinishedSeeking;
 
-        public AudioPlayerImplementation(IVolumeManager volumeManager)
+        public AudioPlayerImplementation(IMediaQueue mediaQueue, IVolumeManager volumeManager)
         {
+            _mediaQueue = mediaQueue;
             _volumeManager = volumeManager;
             _versionHelper = new VersionHelper();
+
+            _mediaQueue.CollectionChanged += MediaQueueOnCollectionChanged;
 
             InitializePlayer();
 
@@ -138,8 +144,6 @@ namespace Plugin.MediaManager
 
         private AVPlayerItem CurrentItem => _player.CurrentItem;
 
-        private NSUrl NsUrl { get; set; }
-
         public override async void ObserveValue(NSString keyPath, NSObject ofObject, NSDictionary change, IntPtr context)
         {
             Console.WriteLine("Observer triggered for {0}", keyPath);
@@ -180,9 +184,10 @@ namespace Plugin.MediaManager
                 return;
             }
 
+            NSUrl url = null;
             if (mediaFile != null)
             {
-                NsUrl = MediaFileUrlHelper.GetUrlFor(mediaFile);
+                url = MediaFileUrlHelper.GetUrlFor(mediaFile);
                 _currentMediaFile = mediaFile;
             }
 
@@ -190,7 +195,7 @@ namespace Plugin.MediaManager
             {
                 Status = MediaPlayerStatus.Buffering;
 
-                var playerItem = GetPlayerItem(NsUrl);
+                var playerItem = GetPlayerItem(url);
                 if (playerItem == null)
                 {
                     Status = MediaPlayerStatus.Failed;
@@ -283,6 +288,56 @@ namespace Plugin.MediaManager
             _player.AddPeriodicTimeObserver(new CMTime(1, 2), DispatchQueue.MainQueue, HandleTimeChange);
         }
 
+        private async void MediaQueueOnCollectionChanged(object sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (e == null)
+            {
+                return;
+            }
+
+            switch (e.Action)
+            {
+                case NotifyCollectionChangedAction.Add:
+                    // TODO figure out when we can actually manipulate the queue (without this delay Mono throws exceptions and crashes the app)
+                    await Task.Delay(10000);
+                    HandleMediaQueueAddAction(e);
+                    break;
+                    //case NotifyCollectionChangedAction.Move:
+                    //    // The reality is that this scenario is never going to happen. Even when we re-order or shuffle, the list is being regenerated (Reset)
+                    //    break;
+                    //case NotifyCollectionChangedAction.Remove:
+                    //    HandleMediaQueueRemoveAction(e);
+                    //    break;
+                    //case NotifyCollectionChangedAction.Replace:
+                    //    await HandleMediaQueueReplaceAction(e);
+                    //    break;
+                    //case NotifyCollectionChangedAction.Reset:
+                    //    await HandleMediaQueueResetAction(sender as IEnumerable<IMediaFile>);
+                    //    break;
+            }
+
+            Debug.WriteLine($"There's {_player.Items.Length} items in the playback queue");
+
+            if (_player.CurrentItem == null)
+            {
+                return;
+            }
+
+            var indexOfCurrentPlayerItem = Array.IndexOf(_player.Items, _player.CurrentItem);
+            if (indexOfCurrentPlayerItem < 0)
+            {
+                return;
+            }
+
+            var hasNext = _player.Items.Length - 1 - indexOfCurrentPlayerItem > 0;
+            var hasPrevious = indexOfCurrentPlayerItem > 0;
+
+            MPRemoteCommandCenter.Shared.NextTrackCommand.Enabled = hasNext;
+            MPRemoteCommandCenter.Shared.PreviousTrackCommand.Enabled = hasPrevious;
+            MPRemoteCommandCenter.Shared.SkipForwardCommand.Enabled = !hasNext;
+            MPRemoteCommandCenter.Shared.SkipBackwardCommand.Enabled = !hasPrevious;
+        }
+
         private void VolumeManagerOnVolumeChanged(object sender, VolumeChangedEventArgs volumeChangedEventArgs)
         {
             _player.Volume = (float)volumeChangedEventArgs.NewVolume / 100;
@@ -291,6 +346,11 @@ namespace Plugin.MediaManager
 
         private AVPlayerItem GetPlayerItem(NSUrl url)
         {
+            if (url == null)
+            {
+                return null;
+            }
+
             AVAsset asset;
 
             if (RequestHeaders?.Any() ?? false)
@@ -393,6 +453,42 @@ namespace Plugin.MediaManager
         private void HandlePlaybackFinished(NSNotification notification)
         {
             MediaFinished?.Invoke(this, new MediaFinishedEventArgs(_currentMediaFile));
+        }
+
+        private void HandleMediaQueueAddAction(NotifyCollectionChangedEventArgs e)
+        {
+            if (e?.NewItems == null)
+            {
+                return;
+            }
+
+            var newMediaFiles = new List<IMediaFile>();
+            foreach (var newItem in e.NewItems)
+            {
+                if (newItem is IMediaFile mediaFile)
+                {
+                    newMediaFiles.Add(mediaFile);
+                }
+                else if (newItem is IEnumerable<IMediaFile> mediaFiles)
+                {
+                    newMediaFiles.AddRange(mediaFiles);
+                }
+
+                foreach (var newMediaFile in newMediaFiles)
+                {
+                    var url = MediaFileUrlHelper.GetUrlFor(newMediaFile);
+                    var playerItem = GetPlayerItem(url);
+
+                    if (_player.CanInsert(playerItem, null))
+                    {
+                        _player.InsertItem(playerItem, null);
+                    }
+                    else
+                    {
+                        Debug.WriteLine($"Unable to insert player item {newMediaFile.Metadata?.Title} into the queue");
+                    }
+                }
+            }
         }
 
     }

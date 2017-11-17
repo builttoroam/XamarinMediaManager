@@ -14,7 +14,7 @@ namespace Plugin.MediaManager
 
         public override IAudioPlayer AudioPlayer
         {
-            get => _audioPlayer ?? (_audioPlayer = new AudioPlayerImplementation(VolumeManager));
+            get => _audioPlayer ?? (_audioPlayer = new AudioPlayerImplementation(MediaQueue, VolumeManager));
             set => _audioPlayer = value;
         }
 

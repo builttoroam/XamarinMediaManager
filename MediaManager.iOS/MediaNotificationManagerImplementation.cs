@@ -1,3 +1,5 @@
+using System;
+using System.Diagnostics;
 using Foundation;
 using MediaPlayer;
 using Plugin.MediaManager.Abstractions;
@@ -32,7 +34,7 @@ namespace Plugin.MediaManager
 
         public override void UpdateNotifications(IMediaFile mediaFile, MediaPlayerStatus status)
         {
-            if (IsSeeking)
+            if (IsRemoteControlTriggeredSeeking)
             {
                 return;
             }
@@ -66,6 +68,8 @@ namespace Plugin.MediaManager
             {
                 return null;
             }
+
+            Debug.WriteLine($"Updating playback metadata {_mediaManager.Position.Minutes} {_mediaManager.Position.Seconds}");
 
             var metadata = mediaFile.Metadata;
             var nowPlayingInfo = new MPNowPlayingInfo

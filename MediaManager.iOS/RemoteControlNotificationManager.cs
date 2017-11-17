@@ -1,3 +1,6 @@
+using System;
+using System.Diagnostics;
+using System.Threading;
 using System.Threading.Tasks;
 using Foundation;
 using MediaPlayer;
@@ -19,7 +22,7 @@ namespace Plugin.MediaManager
         private NSObject _nextCommandUnsubscribeToken;
         private NSObject _previousCommandUnsubscribeToken;
 
-        protected bool IsSeeking;
+        protected bool IsRemoteControlTriggeredSeeking;
 
         public RemoteControlNotificationManager(IPlaybackController playbackController)
         {
@@ -85,7 +88,7 @@ namespace Plugin.MediaManager
 
         private MPRemoteCommandHandlerStatus OnPreviousCommand(MPRemoteCommandEvent e)
         {
-            _playbackController.PlayPrevious();
+            _playbackController.PlayPreviousOrSeekToStart();
 
             return MPRemoteCommandHandlerStatus.Success;
         }
@@ -111,15 +114,19 @@ namespace Plugin.MediaManager
         {
             if (e is MPChangePlaybackPositionCommandEvent playback)
             {
-                IsSeeking = true;
-                try
+                Task.Run(async () =>
                 {
-                    _playbackController.SeekTo(playback.PositionTime);
-                }
-                finally
-                {
-                    IsSeeking = false;
-                }
+                    try
+                    {
+                        IsRemoteControlTriggeredSeeking = true;
+
+                        await _playbackController.SeekTo(playback.PositionTime);
+                    }
+                    finally
+                    {
+                        IsRemoteControlTriggeredSeeking = false;
+                    }
+                });
             }
 
             return MPRemoteCommandHandlerStatus.Success;

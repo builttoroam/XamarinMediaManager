@@ -21,6 +21,8 @@ namespace Plugin.MediaManager
         private readonly NSString _statusObservationKey = new NSString(Constants.StatusObservationKey);
         private readonly NSString _rateObservationKey = new NSString(Constants.RateObservationKey);
         private readonly NSString _loadedTimeRangesObservationKey = new NSString(Constants.LoadedTimeRangesObservationKey);
+        private readonly NSString _playbackLikelyToKeepUpKey = new NSString(Constants.PlaybackLikelyToKeepUpKey);
+        private readonly NSString _playbackBufferFullKey = new NSString(Constants.PlaybackBufferFullKey);
 
         private readonly AVPlayer _player = new AVPlayer();
         private readonly IVolumeManager _volumeManager;
@@ -28,6 +30,8 @@ namespace Plugin.MediaManager
 
         private IMediaFile _currentMediaFile;
         private MediaPlayerStatus _status;
+
+        private bool _justFinishedSeeking;
 
         public AudioPlayerImplementation(IVolumeManager volumeManager)
         {
@@ -38,14 +42,6 @@ namespace Plugin.MediaManager
 
             _status = MediaPlayerStatus.Stopped;
 
-            // Watch the buffering status. If it changes, we may have to resume because the playing stopped because of bad network-conditions.
-            BufferingChanged += (sender, e) =>
-            {
-                // If the player is ready to play, it's paused and the status is still on PLAYING, go on!
-                var isPlaying = Status == MediaPlayerStatus.Playing;
-                if (CurrentItem.Status == AVPlayerItemStatus.ReadyToPlay && Rate == 0.0f && isPlaying)
-                    _player.Play();
-            };
             _volumeManager.Muted = _player.Muted;
             _volumeManager.CurrentVolume = (int)_player.Volume * 100;
             _volumeManager.MaxVolume = 100;
@@ -130,8 +126,13 @@ namespace Plugin.MediaManager
             get => _status;
             private set
             {
+                var statusChanged = _status != value;
                 _status = value;
-                StatusChanged?.Invoke(this, new StatusChangedEventArgs(_status));
+
+                if (statusChanged)
+                {
+                    StatusChanged?.Invoke(this, new StatusChangedEventArgs(_status));
+                }
             }
         }
 
@@ -139,7 +140,7 @@ namespace Plugin.MediaManager
 
         private NSUrl NsUrl { get; set; }
 
-        public override void ObserveValue(NSString keyPath, NSObject ofObject, NSDictionary change, IntPtr context)
+        public override async void ObserveValue(NSString keyPath, NSObject ofObject, NSDictionary change, IntPtr context)
         {
             Console.WriteLine("Observer triggered for {0}", keyPath);
 
@@ -147,13 +148,24 @@ namespace Plugin.MediaManager
             {
                 case Constants.StatusObservationKey:
                     HandlePlaybackStatusChange();
-                    return;
+                    break;
                 case Constants.LoadedTimeRangesObservationKey:
                     HandleLoadedTimeRangesChange();
-                    return;
+                    break;
                 case Constants.RateObservationKey:
                     HandlePlaybackRateChange();
-                    return;
+                    break;
+                case Constants.PlaybackLikelyToKeepUpKey:
+                case Constants.PlaybackBufferFullKey:
+                    if (_justFinishedSeeking)
+                    {
+                        if (Status == MediaPlayerStatus.Paused)
+                        {
+                            await Play();
+                        }
+                        _justFinishedSeeking = false;
+                    }
+                    break;
             }
         }
 
@@ -191,8 +203,10 @@ namespace Plugin.MediaManager
                 // ReSharper disable once PossibleNullReferenceException
                 CurrentItem.AddObserver(this, _loadedTimeRangesObservationKey, NSKeyValueObservingOptions.Initial | NSKeyValueObservingOptions.New, _loadedTimeRangesObservationKey.Handle);
                 CurrentItem.AddObserver(this, _statusObservationKey, NSKeyValueObservingOptions.New | NSKeyValueObservingOptions.Initial, _statusObservationKey.Handle);
+                CurrentItem.AddObserver(this, _playbackLikelyToKeepUpKey, NSKeyValueObservingOptions.New | NSKeyValueObservingOptions.Initial, _playbackLikelyToKeepUpKey.Handle);
+                CurrentItem.AddObserver(this, _playbackBufferFullKey, NSKeyValueObservingOptions.New | NSKeyValueObservingOptions.Initial, _playbackBufferFullKey.Handle);
 
-                NSNotificationCenter.DefaultCenter.AddObserver(AVPlayerItem.DidPlayToEndTimeNotification, HandleFinshedPlaying, CurrentItem);
+                NSNotificationCenter.DefaultCenter.AddObserver(AVPlayerItem.DidPlayToEndTimeNotification, HandlePlaybackFinished, CurrentItem);
 
                 _player.Play();
             }
@@ -240,18 +254,10 @@ namespace Plugin.MediaManager
 
         public async Task Seek(TimeSpan position)
         {
-            if (CurrentItem == null)
-            {
-                return;
-            }
+            await Pause();
+            CurrentItem?.Seek(CMTime.FromSeconds(position.TotalSeconds, 1), HandlePlaybackSeekCompleted);
 
-            await Task.Run(() =>
-            {
-                CurrentItem?.Seek(CMTime.FromSeconds(position.TotalSeconds, 1), finished =>
-                {
-                    Debug.WriteLine($"Seeking to {position.Minutes} {position.Seconds} finished? {finished}");
-                });
-            });
+            await Task.CompletedTask;
         }
 
         private void InitializePlayer()
@@ -273,7 +279,8 @@ namespace Plugin.MediaManager
             }
 #endif
             _player.AddObserver(this, _rateObservationKey, NSKeyValueObservingOptions.New | NSKeyValueObservingOptions.Initial, _rateObservationKey.Handle);
-            _player.AddPeriodicTimeObserver(new CMTime(1, 1), DispatchQueue.MainQueue, HandleTimeChange);
+            // CMTime(1,2) means that the event will be fired 2 times a second
+            _player.AddPeriodicTimeObserver(new CMTime(1, 2), DispatchQueue.MainQueue, HandleTimeChange);
         }
 
         private void VolumeManagerOnVolumeChanged(object sender, VolumeChangedEventArgs volumeChangedEventArgs)
@@ -331,7 +338,6 @@ namespace Plugin.MediaManager
             if (CurrentItem.Status == AVPlayerItemStatus.ReadyToPlay && isBuffering)
             {
                 Status = MediaPlayerStatus.Playing;
-                _player.Play();
             }
             else if (CurrentItem.Status == AVPlayerItemStatus.Failed)
             {
@@ -377,9 +383,17 @@ namespace Plugin.MediaManager
             MediaFailed?.Invoke(this, new MediaFailedEventArgs(error.LocalizedDescription, new NSErrorException(error)));
         }
 
-        private void HandleFinshedPlaying(NSNotification notification)
+        private void HandlePlaybackSeekCompleted(bool seekingCompleted)
+        {
+            Debug.WriteLine($"Seeking to finished? {seekingCompleted}");
+
+            _justFinishedSeeking = seekingCompleted;
+        }
+
+        private void HandlePlaybackFinished(NSNotification notification)
         {
             MediaFinished?.Invoke(this, new MediaFinishedEventArgs(_currentMediaFile));
         }
+
     }
 }

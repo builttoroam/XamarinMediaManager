@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Plugin.MediaManager.Abstractions.Enums;
@@ -83,6 +83,11 @@ namespace Plugin.MediaManager.Abstractions
         Task Play(IEnumerable<IMediaFile> mediaFiles);
 
         /// <summary>
+        /// Adds all MediaFiles to the Queue and starts playing specified one
+        /// </summary>
+        Task Play(IEnumerable<IMediaFile> mediaFiles, int startFromIndex);
+
+        /// <summary>
         /// Plays the next MediaFile in the Queue
         /// </summary>
         Task PlayNext();
@@ -91,7 +96,7 @@ namespace Plugin.MediaManager.Abstractions
         /// Plays the previous MediaFile in the Queue
         /// </summary>
         Task PlayPrevious();
-        
+
         /// <summary>
         /// Plays a MediaFile by its position in the Queue
         /// </summary>

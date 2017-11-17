@@ -183,8 +183,13 @@ namespace Plugin.MediaManager.Abstractions.Implementations
         /// <returns></returns>
         public async Task Play(IEnumerable<IMediaFile> mediaFiles)
         {
+            await Play(mediaFiles, 0);
+        }
+
+        public async Task Play(IEnumerable<IMediaFile> mediaFiles, int startFromIndex)
+        {
             var mediaFilesArray = mediaFiles?.ToArray();
-            if (!(mediaFilesArray?.Any() ?? false))
+            if (!(mediaFilesArray?.Any() ?? false) || startFromIndex < 0 || startFromIndex > mediaFilesArray.Length - 1)
             {
                 return;
             }
@@ -194,8 +199,7 @@ namespace Plugin.MediaManager.Abstractions.Implementations
             MediaQueue.Clear();
             MediaQueue.AddRange(mediaFilesArray);
 
-            // Play from index 0
-            MediaQueue.SetIndexAsCurrent(0);
+            MediaQueue.SetIndexAsCurrent(startFromIndex);
             await PlayCurrent();
 
             MediaNotificationManager?.StartNotification(CurrentMediaFile);

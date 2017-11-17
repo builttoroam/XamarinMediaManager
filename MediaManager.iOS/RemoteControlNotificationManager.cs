@@ -19,6 +19,8 @@ namespace Plugin.MediaManager
         private NSObject _nextCommandUnsubscribeToken;
         private NSObject _previousCommandUnsubscribeToken;
 
+        protected bool IsSeeking;
+
         public RemoteControlNotificationManager(IPlaybackController playbackController)
         {
             _playbackController = playbackController;
@@ -36,11 +38,6 @@ namespace Plugin.MediaManager
 
         public virtual void StartNotification(IMediaFile mediaFile)
         {
-            InvokeOnMainThread(() =>
-            {
-                UIApplication.SharedApplication.BeginReceivingRemoteControlEvents();
-            });
-
             _playCommandUnsubscribeToken = MPRemoteCommandCenter.Shared.PlayCommand.AddTarget(OnPlayCommand);
             _pauseCommandUnsubscribeToken = MPRemoteCommandCenter.Shared.PauseCommand.AddTarget(OnPauseCommand);
             _skipForwardCommandUnsubscribeToken = MPRemoteCommandCenter.Shared.SkipForwardCommand.AddTarget(OnSkipCommand);
@@ -59,11 +56,6 @@ namespace Plugin.MediaManager
             MPRemoteCommandCenter.Shared.ChangePlaybackPositionCommand.RemoveTarget(_changePlaybackPositionCommandUnsubscribeToken);
             MPRemoteCommandCenter.Shared.NextTrackCommand.RemoveTarget(_nextCommandUnsubscribeToken);
             MPRemoteCommandCenter.Shared.PreviousTrackCommand.RemoveTarget(_previousCommandUnsubscribeToken);
-
-            InvokeOnMainThread(() =>
-            {
-                UIApplication.SharedApplication.EndReceivingRemoteControlEvents();
-            });
         }
 
         public virtual void UpdateNotifications(IMediaFile mediaFile, MediaPlayerStatus status)
@@ -119,7 +111,15 @@ namespace Plugin.MediaManager
         {
             if (e is MPChangePlaybackPositionCommandEvent playback)
             {
-                _playbackController.SeekTo(playback.PositionTime);
+                IsSeeking = true;
+                try
+                {
+                    _playbackController.SeekTo(playback.PositionTime);
+                }
+                finally
+                {
+                    IsSeeking = false;
+                }
             }
 
             return MPRemoteCommandHandlerStatus.Success;

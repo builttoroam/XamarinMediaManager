@@ -273,7 +273,7 @@ namespace Plugin.MediaManager
             }
 #endif
             _player.AddObserver(this, _rateObservationKey, NSKeyValueObservingOptions.New | NSKeyValueObservingOptions.Initial, _rateObservationKey.Handle);
-            _player.AddPeriodicTimeObserver(new CMTime(1, 4), DispatchQueue.MainQueue, HandleTimeChange);
+            _player.AddPeriodicTimeObserver(new CMTime(1, 1), DispatchQueue.MainQueue, HandleTimeChange);
         }
 
         private void VolumeManagerOnVolumeChanged(object sender, VolumeChangedEventArgs volumeChangedEventArgs)
@@ -316,6 +316,8 @@ namespace Plugin.MediaManager
 
                 var totalDuration = TimeSpan.FromSeconds(CurrentItem.Duration.Seconds);
                 var totalProgress = Position.TotalMilliseconds / totalDuration.TotalMilliseconds;
+
+                Debug.WriteLine($"Total Progress: {Position.Minutes} { Position.Seconds}");
 
                 PlayingChanged?.Invoke(this, new PlayingChangedEventArgs(!double.IsInfinity(totalProgress) ? totalProgress : 0, Position, Duration));
             }

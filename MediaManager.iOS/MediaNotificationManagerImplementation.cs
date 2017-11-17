@@ -32,6 +32,11 @@ namespace Plugin.MediaManager
 
         public override void UpdateNotifications(IMediaFile mediaFile, MediaPlayerStatus status)
         {
+            if (IsSeeking)
+            {
+                return;
+            }
+
             TrySetNowPlayingInfo(mediaFile);
 
             base.UpdateNotifications(mediaFile, status);
@@ -87,6 +92,6 @@ namespace Plugin.MediaManager
             }
 
             return nowPlayingInfo;
-        }        
+        }
     }
 }

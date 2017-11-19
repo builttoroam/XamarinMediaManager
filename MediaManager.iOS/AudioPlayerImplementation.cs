@@ -26,6 +26,8 @@ namespace Plugin.MediaManager
         private readonly NSString _playbackBufferFullKey = new NSString(Constants.PlaybackBufferFullKey);
 
         private readonly AVQueuePlayer _player = new AVQueuePlayer();
+        private readonly List<AVPlayerItem> _playerItems = new List<AVPlayerItem>();
+        private readonly IDictionary<Guid, AVPlayerItem> _playerItemByMediaFileIdDict = new Dictionary<Guid, AVPlayerItem>();
 
         private readonly IMediaQueue _mediaQueue;
         private readonly IVolumeManager _volumeManager;
@@ -175,36 +177,78 @@ namespace Plugin.MediaManager
 
         public async Task Play(IMediaFile mediaFile = null)
         {
-            var sameMediaFile = mediaFile == null || mediaFile.Equals(_currentMediaFile);
+            if (mediaFile == null && _player.CurrentItem == null)
+            {
+                Status = MediaPlayerStatus.Failed;
+                return;
+            }
 
-            if (Status == MediaPlayerStatus.Paused && sameMediaFile)
+            if (mediaFile == null || mediaFile.Equals(_currentMediaFile) && Status == MediaPlayerStatus.Paused)
             {
                 _player.Play();
                 Status = MediaPlayerStatus.Playing;
                 return;
             }
 
-            NSUrl url = null;
-            if (mediaFile != null)
+            AVPlayerItem playerItemToPlay = null;
+            if (_playerItemByMediaFileIdDict.ContainsKey(mediaFile.Id))
             {
-                url = MediaFileUrlHelper.GetUrlFor(mediaFile);
-                _currentMediaFile = mediaFile;
+                playerItemToPlay = _playerItemByMediaFileIdDict[mediaFile.Id];
+            }
+            else
+            {
+                var url = MediaFileUrlHelper.GetUrlFor(mediaFile);
+                playerItemToPlay = GetPlayerItem(url);
+            }
+
+            if (playerItemToPlay == null)
+            {
+                Status = MediaPlayerStatus.Failed;
+                return;
             }
 
             try
             {
-                Status = MediaPlayerStatus.Buffering;
-
-                var playerItem = GetPlayerItem(url);
-                if (playerItem == null)
-                {
-                    Status = MediaPlayerStatus.Failed;
-                    return;
-                }
-
                 CurrentItem?.RemoveObserver(this, _statusObservationKey);
 
-                _player.ReplaceCurrentItemWithPlayerItem(playerItem);
+                var indexOfCurrentItem = _playerItems.IndexOf(CurrentItem);
+                var indexOfItemToPlay = _playerItems.IndexOf(playerItemToPlay);
+                // the item to play is the next one on the list
+                if (indexOfCurrentItem >= 0 && indexOfItemToPlay >= 0 && indexOfCurrentItem + 1 == indexOfItemToPlay)
+                {
+                    _player.AdvanceToNextItem();
+                }
+                else
+                {
+                    // Unfortunately, there's no other way of playing previous episode.
+                    // The current list needs to be cleared and recrated, starting from the episode to play
+                    // This implementation is inspired by the following StackOverflow thread: https://stackoverflow.com/questions/12176699/skip-to-previous-avplayeritem-on-avqueueplayer-play-selected-item-from-queue
+                    _player.RemoveAllItems();
+                    // the item to play is not in the current list
+                    if (indexOfItemToPlay < 0)
+                    {
+                        _playerItemByMediaFileIdDict.Clear();
+                        _playerItems.Clear();
+                        _player.ReplaceCurrentItemWithPlayerItem(playerItemToPlay);
+
+                        _playerItems.Add(playerItemToPlay);
+                        _playerItemByMediaFileIdDict.Add(mediaFile.Id, playerItemToPlay);
+                    }
+                    else
+                    {
+                        for (int i = indexOfItemToPlay; i < _playerItems.Count; i++)
+                        {
+                            if (_player.CanInsert(_playerItems[i], null))
+                            {
+                                _player.InsertItem(_playerItems[i], null);
+                            }
+                        }
+                    }
+                }
+
+                _currentMediaFile = mediaFile;
+                Status = MediaPlayerStatus.Buffering;
+
                 // ReSharper disable once PossibleNullReferenceException
                 CurrentItem.AddObserver(this, _loadedTimeRangesObservationKey, NSKeyValueObservingOptions.Initial | NSKeyValueObservingOptions.New, _loadedTimeRangesObservationKey.Handle);
                 CurrentItem.AddObserver(this, _statusObservationKey, NSKeyValueObservingOptions.New | NSKeyValueObservingOptions.Initial, _statusObservationKey.Handle);
@@ -214,10 +258,12 @@ namespace Plugin.MediaManager
                 NSNotificationCenter.DefaultCenter.AddObserver(AVPlayerItem.DidPlayToEndTimeNotification, HandlePlaybackFinished, CurrentItem);
 
                 _player.Play();
+
+                UpdateRemoteControlButtonsVisibility();
             }
             catch (Exception ex)
             {
-                HandleMediaPlaybackFailure();
+                HandleMediaPlaybackFailure(ex);
                 Status = MediaPlayerStatus.Stopped;
 
                 //unable to start playback log error
@@ -323,19 +369,7 @@ namespace Plugin.MediaManager
                 return;
             }
 
-            var indexOfCurrentPlayerItem = Array.IndexOf(_player.Items, _player.CurrentItem);
-            if (indexOfCurrentPlayerItem < 0)
-            {
-                return;
-            }
-
-            var hasNext = _player.Items.Length - 1 - indexOfCurrentPlayerItem > 0;
-            var hasPrevious = indexOfCurrentPlayerItem > 0;
-
-            MPRemoteCommandCenter.Shared.NextTrackCommand.Enabled = hasNext;
-            MPRemoteCommandCenter.Shared.PreviousTrackCommand.Enabled = hasPrevious;
-            MPRemoteCommandCenter.Shared.SkipForwardCommand.Enabled = !hasNext;
-            MPRemoteCommandCenter.Shared.SkipBackwardCommand.Enabled = !hasPrevious;
+            UpdateRemoteControlButtonsVisibility();
         }
 
         private void VolumeManagerOnVolumeChanged(object sender, VolumeChangedEventArgs volumeChangedEventArgs)
@@ -436,11 +470,23 @@ namespace Plugin.MediaManager
             }
         }
 
-        private void HandleMediaPlaybackFailure()
+        private void HandleMediaPlaybackFailure(Exception ex = null)
         {
-            var error = CurrentItem.Error;
+            string errorMsg;
+            Exception exception;
 
-            MediaFailed?.Invoke(this, new MediaFailedEventArgs(error.LocalizedDescription, new NSErrorException(error)));
+            if (CurrentItem.Error != null)
+            {
+                errorMsg = CurrentItem.Error.LocalizedDescription;
+                exception = new NSErrorException(CurrentItem.Error);
+            }
+            else
+            {
+                errorMsg = ex?.Message;
+                exception = ex;
+            }
+
+            MediaFailed?.Invoke(this, new MediaFailedEventArgs(errorMsg, exception));
         }
 
         private void HandlePlaybackSeekCompleted(bool seekingCompleted)
@@ -476,12 +522,19 @@ namespace Plugin.MediaManager
 
                 foreach (var newMediaFile in newMediaFiles)
                 {
+                    if (_playerItemByMediaFileIdDict.ContainsKey(newMediaFile.Id))
+                    {
+                        continue;
+                    }
+
                     var url = MediaFileUrlHelper.GetUrlFor(newMediaFile);
                     var playerItem = GetPlayerItem(url);
 
                     if (_player.CanInsert(playerItem, null))
                     {
                         _player.InsertItem(playerItem, null);
+                        _playerItems.Add(playerItem);
+                        _playerItemByMediaFileIdDict.Add(newMediaFile.Id, playerItem);
                     }
                     else
                     {
@@ -491,5 +544,21 @@ namespace Plugin.MediaManager
             }
         }
 
+        private void UpdateRemoteControlButtonsVisibility()
+        {
+            var indexOfCurrentPlayerItem = _playerItems.IndexOf(_player.CurrentItem);
+            if (indexOfCurrentPlayerItem < 0)
+            {
+                return;
+            }
+
+            var hasNext = _playerItems.Count - 1 - indexOfCurrentPlayerItem > 0;
+            var hasPrevious = indexOfCurrentPlayerItem > 0;
+
+            MPRemoteCommandCenter.Shared.NextTrackCommand.Enabled = hasNext;
+            MPRemoteCommandCenter.Shared.PreviousTrackCommand.Enabled = hasPrevious;
+            MPRemoteCommandCenter.Shared.SkipForwardCommand.Enabled = !hasNext;
+            MPRemoteCommandCenter.Shared.SkipBackwardCommand.Enabled = !hasPrevious;
+        }
     }
 }

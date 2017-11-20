@@ -190,12 +190,8 @@ namespace Plugin.MediaManager
                 return;
             }
 
-            AVPlayerItem playerItemToPlay = null;
-            if (_playerItemByMediaFileIdDict.ContainsKey(mediaFile.Id))
-            {
-                playerItemToPlay = _playerItemByMediaFileIdDict[mediaFile.Id];
-            }
-            else
+            var playerItemToPlay = RetrievePlayerItem(mediaFile);
+            if (playerItemToPlay == null)
             {
                 var url = MediaFileUrlHelper.GetUrlFor(mediaFile);
                 playerItemToPlay = GetPlayerItem(url);
@@ -209,7 +205,7 @@ namespace Plugin.MediaManager
 
             try
             {
-                CurrentItem?.RemoveObserver(this, _statusObservationKey);
+                RemoveCurrentItemObservers();
 
                 var indexOfCurrentItem = _playerItems.IndexOf(CurrentItem);
                 var indexOfItemToPlay = _playerItems.IndexOf(playerItemToPlay);
@@ -220,13 +216,10 @@ namespace Plugin.MediaManager
                 }
                 else
                 {
-                    // Unfortunately, there's no other way of playing previous episode.
-                    // The current list needs to be cleared and recrated, starting from the episode to play
-                    // This implementation is inspired by the following StackOverflow thread: https://stackoverflow.com/questions/12176699/skip-to-previous-avplayeritem-on-avqueueplayer-play-selected-item-from-queue
-                    _player.RemoveAllItems();
                     // the item to play is not in the current list
                     if (indexOfItemToPlay < 0)
                     {
+                        _player.RemoveAllItems();
                         _playerItemByMediaFileIdDict.Clear();
                         _playerItems.Clear();
                         _player.ReplaceCurrentItemWithPlayerItem(playerItemToPlay);
@@ -236,26 +229,14 @@ namespace Plugin.MediaManager
                     }
                     else
                     {
-                        for (int i = indexOfItemToPlay; i < _playerItems.Count; i++)
-                        {
-                            if (_player.CanInsert(_playerItems[i], null))
-                            {
-                                _player.InsertItem(_playerItems[i], null);
-                            }
-                        }
+                        PlayStartingFromIndex(indexOfItemToPlay);
                     }
                 }
 
                 _currentMediaFile = mediaFile;
                 Status = MediaPlayerStatus.Buffering;
 
-                // ReSharper disable once PossibleNullReferenceException
-                CurrentItem.AddObserver(this, _loadedTimeRangesObservationKey, NSKeyValueObservingOptions.Initial | NSKeyValueObservingOptions.New, _loadedTimeRangesObservationKey.Handle);
-                CurrentItem.AddObserver(this, _statusObservationKey, NSKeyValueObservingOptions.New | NSKeyValueObservingOptions.Initial, _statusObservationKey.Handle);
-                CurrentItem.AddObserver(this, _playbackLikelyToKeepUpKey, NSKeyValueObservingOptions.New | NSKeyValueObservingOptions.Initial, _playbackLikelyToKeepUpKey.Handle);
-                CurrentItem.AddObserver(this, _playbackBufferFullKey, NSKeyValueObservingOptions.New | NSKeyValueObservingOptions.Initial, _playbackBufferFullKey.Handle);
-
-                NSNotificationCenter.DefaultCenter.AddObserver(AVPlayerItem.DidPlayToEndTimeNotification, HandlePlaybackFinished, CurrentItem);
+                AddCurrentItemObservers();
 
                 _player.Play();
 
@@ -311,6 +292,21 @@ namespace Plugin.MediaManager
             await Task.CompletedTask;
         }
 
+        private void PlayStartingFromIndex(int indexOfItemToPlay)
+        {
+            // Unfortunately, AVQueuePlayer implementation allows only to play next episode.
+            // Playing previous episode, or any other episode for that matter (that's not the next one) requires clearing and re-creating playback list, starting from the episode index to be played
+            // This implementation is inspired by the following StackOverflow thread: https://stackoverflow.com/questions/12176699/skip-to-previous-avplayeritem-on-avqueueplayer-play-selected-item-from-queue
+            _player.RemoveAllItems();
+            for (int i = indexOfItemToPlay; i < _playerItems.Count; i++)
+            {
+                if (_player.CanInsert(_playerItems[i], null))
+                {
+                    _player.InsertItem(_playerItems[i], null);
+                }
+            }
+        }
+
         private void InitializePlayer()
         {
             if (_versionHelper.SupportsAutomaticWaitPlayerProperty)
@@ -348,12 +344,12 @@ namespace Plugin.MediaManager
                     await Task.Delay(10000);
                     HandleMediaQueueAddAction(e);
                     break;
-                    //case NotifyCollectionChangedAction.Move:
-                    //    // The reality is that this scenario is never going to happen. Even when we re-order or shuffle, the list is being regenerated (Reset)
-                    //    break;
-                    //case NotifyCollectionChangedAction.Remove:
-                    //    HandleMediaQueueRemoveAction(e);
-                    //    break;
+                case NotifyCollectionChangedAction.Move:
+                    // The reality is that this scenario is never going to happen. Even when we re-order or shuffle, the list is being regenerated (Reset)
+                    break;
+                case NotifyCollectionChangedAction.Remove:
+                    HandleMediaQueueRemoveAction(e);
+                    break;
                     //case NotifyCollectionChangedAction.Replace:
                     //    await HandleMediaQueueReplaceAction(e);
                     //    break;
@@ -544,6 +540,50 @@ namespace Plugin.MediaManager
             }
         }
 
+        private void HandleMediaQueueRemoveAction(NotifyCollectionChangedEventArgs e)
+        {
+            if (e?.OldItems == null)
+            {
+                return;
+            }
+
+            var currentPlayerItemIndex = _playerItems.IndexOf(CurrentItem);
+            foreach (var oldItem in e.OldItems)
+            {
+                if (oldItem is IMediaFile mediaFile)
+                {
+                    var playerItem = RetrievePlayerItem(mediaFile);
+                    if (playerItem == null)
+                    {
+                        continue;
+                    }
+
+                    var playerItemIndex = _playerItems.IndexOf(playerItem);
+                    var isPlayerItemCurrentlyPlaying = playerItemIndex == currentPlayerItemIndex;
+                    if (isPlayerItemCurrentlyPlaying)
+                    {
+                        _player.Pause();
+                    }
+
+                    _playerItems.RemoveAt(playerItemIndex);
+                    _playerItemByMediaFileIdDict.Remove(mediaFile.Id);
+                    if (_playerItems.Any() && isPlayerItemCurrentlyPlaying)
+                    {
+                        RemoveCurrentItemObservers();
+                        if (playerItemIndex == 0)
+                        {
+                            _player.AdvanceToNextItem();
+                        }
+                        else
+                        {
+                            PlayStartingFromIndex(playerItemIndex - 1);
+                        }
+                        AddCurrentItemObservers();
+                    }
+                }
+            }
+        }
+
         private void UpdateRemoteControlButtonsVisibility()
         {
             var indexOfCurrentPlayerItem = _playerItems.IndexOf(_player.CurrentItem);
@@ -559,6 +599,55 @@ namespace Plugin.MediaManager
             MPRemoteCommandCenter.Shared.PreviousTrackCommand.Enabled = hasPrevious;
             MPRemoteCommandCenter.Shared.SkipForwardCommand.Enabled = !hasNext;
             MPRemoteCommandCenter.Shared.SkipBackwardCommand.Enabled = !hasPrevious;
+        }
+
+        private AVPlayerItem RetrievePlayerItem(IMediaFile mediaFile)
+        {
+            if (mediaFile == null)
+            {
+                return null;
+            }
+
+            if (_playerItemByMediaFileIdDict.ContainsKey(mediaFile.Id))
+            {
+                return _playerItemByMediaFileIdDict[mediaFile.Id];
+            }
+
+            return null;
+
+        }
+
+        private void AddCurrentItemObservers()
+        {
+            // ReSharper disable once PossibleNullReferenceException
+            CurrentItem.AddObserver(this, _loadedTimeRangesObservationKey, NSKeyValueObservingOptions.Initial | NSKeyValueObservingOptions.New, _loadedTimeRangesObservationKey.Handle);
+            CurrentItem.AddObserver(this, _statusObservationKey, NSKeyValueObservingOptions.New | NSKeyValueObservingOptions.Initial, _statusObservationKey.Handle);
+            CurrentItem.AddObserver(this, _playbackLikelyToKeepUpKey, NSKeyValueObservingOptions.New | NSKeyValueObservingOptions.Initial, _playbackLikelyToKeepUpKey.Handle);
+            CurrentItem.AddObserver(this, _playbackBufferFullKey, NSKeyValueObservingOptions.New | NSKeyValueObservingOptions.Initial, _playbackBufferFullKey.Handle);
+
+            NSNotificationCenter.DefaultCenter.AddObserver(AVPlayerItem.DidPlayToEndTimeNotification, HandlePlaybackFinished, CurrentItem);
+        }
+
+        private void RemoveCurrentItemObservers()
+        {
+            if (CurrentItem != null)
+            {
+                try
+                {
+                    CurrentItem.RemoveObserver(this, _loadedTimeRangesObservationKey);
+                    CurrentItem.RemoveObserver(this, _statusObservationKey);
+                    CurrentItem.RemoveObserver(this, _playbackLikelyToKeepUpKey);
+                    CurrentItem.RemoveObserver(this, _playbackBufferFullKey);
+
+                    NSNotificationCenter.DefaultCenter.RemoveObserver(CurrentItem);
+                }
+                catch (Exception ex)
+                {
+                    // There could be a situation where CurrentItem doesn't have an observer that we want to remove
+                    // Swallow such exception
+                    Debug.WriteLine(ex.Message);
+                }
+            }
         }
     }
 }

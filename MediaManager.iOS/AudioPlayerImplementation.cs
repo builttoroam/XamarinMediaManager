@@ -14,6 +14,7 @@ using MediaPlayer;
 using Plugin.MediaManager.Abstractions;
 using Plugin.MediaManager.Abstractions.Enums;
 using Plugin.MediaManager.Abstractions.EventArguments;
+using Plugin.MediaManager.Abstractions.Implementations;
 
 namespace Plugin.MediaManager
 {
@@ -33,7 +34,6 @@ namespace Plugin.MediaManager
         private readonly IVolumeManager _volumeManager;
         private readonly IVersionHelper _versionHelper;
 
-        private IMediaFile _currentMediaFile;
         private MediaPlayerStatus _status;
 
         private bool _justFinishedSeeking;
@@ -183,7 +183,7 @@ namespace Plugin.MediaManager
                 return;
             }
 
-            if (mediaFile == null || mediaFile.Equals(_currentMediaFile) && Status == MediaPlayerStatus.Paused)
+            if (mediaFile == null || mediaFile.Equals(_mediaQueue.Current) && Status == MediaPlayerStatus.Paused)
             {
                 _player.Play();
                 Status = MediaPlayerStatus.Playing;
@@ -233,7 +233,6 @@ namespace Plugin.MediaManager
                     }
                 }
 
-                _currentMediaFile = mediaFile;
                 Status = MediaPlayerStatus.Buffering;
 
                 AddCurrentItemObservers();
@@ -345,14 +344,14 @@ namespace Plugin.MediaManager
                     HandleMediaQueueAddAction(e);
                     break;
                 case NotifyCollectionChangedAction.Move:
-                    // The reality is that this scenario is never going to happen. Even when we re-order or shuffle, the list is being regenerated (Reset)
+                    // The reality is that this scenario is never going to happen. Even when we re-ordering or shuffling, the list is being regenerated (Reset)
                     break;
                 case NotifyCollectionChangedAction.Remove:
                     HandleMediaQueueRemoveAction(e);
                     break;
-                    //case NotifyCollectionChangedAction.Replace:
-                    //    await HandleMediaQueueReplaceAction(e);
-                    //    break;
+                case NotifyCollectionChangedAction.Replace:
+                    //await HandleMediaQueueReplaceAction(e);
+                    break;
                     //case NotifyCollectionChangedAction.Reset:
                     //    await HandleMediaQueueResetAction(sender as IEnumerable<IMediaFile>);
                     //    break;
@@ -494,7 +493,9 @@ namespace Plugin.MediaManager
 
         private void HandlePlaybackFinished(NSNotification notification)
         {
-            MediaFinished?.Invoke(this, new MediaFinishedEventArgs(_currentMediaFile));
+            Debug.WriteLine($"Audio with title {_mediaQueue.Current?.Metadata?.Title} finished playing");
+
+            MediaFinished?.Invoke(this, new MediaFinishedEventArgs(_mediaQueue.Current));
         }
 
         private void HandleMediaQueueAddAction(NotifyCollectionChangedEventArgs e)
@@ -586,7 +587,7 @@ namespace Plugin.MediaManager
 
         private void UpdateRemoteControlButtonsVisibility()
         {
-            var indexOfCurrentPlayerItem = _playerItems.IndexOf(_player.CurrentItem);
+            var indexOfCurrentPlayerItem = _playerItems.IndexOf(CurrentItem);
             if (indexOfCurrentPlayerItem < 0)
             {
                 return;

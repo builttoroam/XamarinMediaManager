@@ -50,13 +50,20 @@ namespace Plugin.MediaManager
 
         public virtual void StopNotifications()
         {
-            MPRemoteCommandCenter.Shared.PlayCommand.RemoveTarget(_playCommandUnsubscribeToken);
-            MPRemoteCommandCenter.Shared.PauseCommand.RemoveTarget(_pauseCommandUnsubscribeToken);
-            MPRemoteCommandCenter.Shared.SkipForwardCommand.RemoveTarget(_skipForwardCommandUnsubscribeToken);
-            MPRemoteCommandCenter.Shared.SkipBackwardCommand.RemoveTarget(_skipBackwardCommandUnsubscribeToken);
-            MPRemoteCommandCenter.Shared.ChangePlaybackPositionCommand.RemoveTarget(_changePlaybackPositionCommandUnsubscribeToken);
-            MPRemoteCommandCenter.Shared.NextTrackCommand.RemoveTarget(_nextCommandUnsubscribeToken);
-            MPRemoteCommandCenter.Shared.PreviousTrackCommand.RemoveTarget(_previousCommandUnsubscribeToken);
+            try
+            {
+                MPRemoteCommandCenter.Shared.PlayCommand.RemoveTarget(_playCommandUnsubscribeToken);
+                MPRemoteCommandCenter.Shared.PauseCommand.RemoveTarget(_pauseCommandUnsubscribeToken);
+                MPRemoteCommandCenter.Shared.SkipForwardCommand.RemoveTarget(_skipForwardCommandUnsubscribeToken);
+                MPRemoteCommandCenter.Shared.SkipBackwardCommand.RemoveTarget(_skipBackwardCommandUnsubscribeToken);
+                MPRemoteCommandCenter.Shared.ChangePlaybackPositionCommand.RemoveTarget(_changePlaybackPositionCommandUnsubscribeToken);
+                MPRemoteCommandCenter.Shared.NextTrackCommand.RemoveTarget(_nextCommandUnsubscribeToken);
+                MPRemoteCommandCenter.Shared.PreviousTrackCommand.RemoveTarget(_previousCommandUnsubscribeToken);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine(ex.Message);
+            }
         }
 
         public virtual void UpdateNotifications(IMediaFile mediaFile, MediaPlayerStatus status)

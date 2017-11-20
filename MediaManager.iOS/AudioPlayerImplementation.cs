@@ -194,7 +194,7 @@ namespace Plugin.MediaManager
             if (playerItemToPlay == null)
             {
                 var url = MediaFileUrlHelper.GetUrlFor(mediaFile);
-                playerItemToPlay = GetPlayerItem(url);
+                playerItemToPlay = CreatePlayerItem(url);
             }
 
             if (playerItemToPlay == null)
@@ -294,7 +294,7 @@ namespace Plugin.MediaManager
         private void PlayStartingFromIndex(int indexOfItemToPlay)
         {
             // Unfortunately, AVQueuePlayer implementation allows only to play next episode.
-            // Playing previous episode, or any other episode for that matter (that's not the next one) requires clearing and re-creating playback list, starting from the episode index to be played
+            // Playing previous episode, or any other episode for that matter (that's not the next one), requires clearing and re-creating playback list, starting from the episode index to be played
             // This implementation is inspired by the following StackOverflow thread: https://stackoverflow.com/questions/12176699/skip-to-previous-avplayeritem-on-avqueueplayer-play-selected-item-from-queue
             _player.RemoveAllItems();
             for (int i = indexOfItemToPlay; i < _playerItems.Count; i++)
@@ -340,21 +340,20 @@ namespace Plugin.MediaManager
             {
                 case NotifyCollectionChangedAction.Add:
                     // TODO figure out when we can actually manipulate the queue (without this delay Mono throws exceptions and crashes the app)
-                    await Task.Delay(10000);
                     HandleMediaQueueAddAction(e);
                     break;
                 case NotifyCollectionChangedAction.Move:
-                    // The reality is that this scenario is never going to happen. Even when we re-ordering or shuffling, the list is being regenerated (Reset)
+                    // The reality is that this scenario is never going to happen. Even when re-ordering or shuffling happens, the list is being regenerated (Reset)
                     break;
                 case NotifyCollectionChangedAction.Remove:
                     HandleMediaQueueRemoveAction(e);
                     break;
                 case NotifyCollectionChangedAction.Replace:
-                    //await HandleMediaQueueReplaceAction(e);
+                    HandleMediaQueueReplaceAction(e);
                     break;
-                    //case NotifyCollectionChangedAction.Reset:
-                    //    await HandleMediaQueueResetAction(sender as IEnumerable<IMediaFile>);
-                    //    break;
+                case NotifyCollectionChangedAction.Reset:
+                    HandleMediaQueueResetAction(sender as IEnumerable<IMediaFile>);
+                    break;
             }
 
             Debug.WriteLine($"There's {_player.Items.Length} items in the playback queue");
@@ -373,7 +372,7 @@ namespace Plugin.MediaManager
             _player.Muted = volumeChangedEventArgs.Muted;
         }
 
-        private AVPlayerItem GetPlayerItem(NSUrl url)
+        private AVPlayerItem CreatePlayerItem(NSUrl url)
         {
             if (url == null)
             {
@@ -398,6 +397,11 @@ namespace Plugin.MediaManager
 
         private void HandleTimeChange(CMTime time)
         {
+            if (CurrentItem == null)
+            {
+                return;
+            }
+
             if (CurrentItem.Duration.IsInvalid || CurrentItem.Duration.IsIndefinite || double.IsNaN(CurrentItem.Duration.Seconds))
             {
                 PlayingChanged?.Invoke(this, new PlayingChangedEventArgs(0, Position, Duration));
@@ -421,6 +425,11 @@ namespace Plugin.MediaManager
 
         private void HandlePlaybackStatusChange()
         {
+            if (CurrentItem == null)
+            {
+                return;
+            }
+
             Console.WriteLine("Status Observed Method {0}", CurrentItem.Status);
 
             var isBuffering = Status == MediaPlayerStatus.Buffering;
@@ -447,6 +456,11 @@ namespace Plugin.MediaManager
 
         private void HandleLoadedTimeRangesChange()
         {
+            if (CurrentItem == null)
+            {
+                return;
+            }
+
             var loadedTimeRanges = CurrentItem.LoadedTimeRanges;
             var hasLoadedAnyTimeRanges = loadedTimeRanges != null && loadedTimeRanges.Length > 0;
 
@@ -523,13 +537,21 @@ namespace Plugin.MediaManager
                     {
                         continue;
                     }
-
                     var url = MediaFileUrlHelper.GetUrlFor(newMediaFile);
-                    var playerItem = GetPlayerItem(url);
+                    var playerItem = CreatePlayerItem(url);
+
+                    if (playerItem == null)
+                    {
+                        continue;
+                    }
 
                     if (_player.CanInsert(playerItem, null))
                     {
                         _player.InsertItem(playerItem, null);
+                        if (_player.Items.Length == 1)
+                        {
+                            AddCurrentItemObservers();
+                        }
                         _playerItems.Add(playerItem);
                         _playerItemByMediaFileIdDict.Add(newMediaFile.Id, playerItem);
                     }
@@ -548,41 +570,155 @@ namespace Plugin.MediaManager
                 return;
             }
 
-            var currentPlayerItemIndex = _playerItems.IndexOf(CurrentItem);
             foreach (var oldItem in e.OldItems)
             {
                 if (oldItem is IMediaFile mediaFile)
                 {
-                    var playerItem = RetrievePlayerItem(mediaFile);
-                    if (playerItem == null)
+                    var playerItemToRemove = RetrievePlayerItem(mediaFile);
+                    if (playerItemToRemove == null)
                     {
                         continue;
                     }
 
-                    var playerItemIndex = _playerItems.IndexOf(playerItem);
-                    var isPlayerItemCurrentlyPlaying = playerItemIndex == currentPlayerItemIndex;
-                    if (isPlayerItemCurrentlyPlaying)
+                    var playerItemToRemoveIndex = _playerItems.IndexOf(playerItemToRemove);
+                    var isPlayerItemToRemoveCurrentlyPlaying = Equals(playerItemToRemove, CurrentItem);
+                    if (isPlayerItemToRemoveCurrentlyPlaying)
                     {
                         _player.Pause();
                     }
 
-                    _playerItems.RemoveAt(playerItemIndex);
+                    _player.RemoveItem(playerItemToRemove);
+                    _playerItems.RemoveAt(playerItemToRemoveIndex);
                     _playerItemByMediaFileIdDict.Remove(mediaFile.Id);
-                    if (_playerItems.Any() && isPlayerItemCurrentlyPlaying)
+                    if (_playerItems.Any() && isPlayerItemToRemoveCurrentlyPlaying)
                     {
                         RemoveCurrentItemObservers();
-                        if (playerItemIndex == 0)
+                        if (playerItemToRemoveIndex == 0)
                         {
                             _player.AdvanceToNextItem();
                         }
                         else
                         {
-                            PlayStartingFromIndex(playerItemIndex - 1);
+                            PlayStartingFromIndex(playerItemToRemoveIndex - 1);
                         }
                         AddCurrentItemObservers();
                     }
                 }
             }
+        }
+
+        private void HandleMediaQueueReplaceAction(NotifyCollectionChangedEventArgs e)
+        {
+            if (e?.NewItems == null || e.OldItems == null)
+            {
+                return;
+            }
+
+            try
+            {
+                var newMediaFile = e.NewItems[0] as IMediaFile;
+                var oldMediaFile = e.OldItems[0] as IMediaFile;
+
+                if (newMediaFile == null || oldMediaFile == null)
+                {
+                    return;
+                }
+
+                var playerItemInPlaylist = RetrievePlayerItem(oldMediaFile);
+                if (playerItemInPlaylist == null)
+                {
+                    return;
+                }
+
+                if (newMediaFile == oldMediaFile || newMediaFile.Url == oldMediaFile.Url)
+                {
+                    // Update same media file
+                }
+                else
+                {
+                    // Replace playlist media file with new one
+                    if (Equals(playerItemInPlaylist, CurrentItem))
+                    {
+                        _player.Pause();
+                        RemoveCurrentItemObservers();
+                    }
+
+                    var playerItemInPlaylistIndex = _playerItems.IndexOf(playerItemInPlaylist);
+
+                    _player.RemoveItem(playerItemInPlaylist);
+                    _playerItems.RemoveAt(playerItemInPlaylistIndex);
+                    _playerItemByMediaFileIdDict.Remove(oldMediaFile.Id);
+
+                    var url = MediaFileUrlHelper.GetUrlFor(newMediaFile);
+                    var newPlayerItem = CreatePlayerItem(url);
+                    if (newPlayerItem == null)
+                    {
+                        return;
+                    }
+
+                    var beforePlayerItemIndex = Math.Max(0, playerItemInPlaylistIndex - 1);
+                    var beforePlayerItem = _playerItems[beforePlayerItemIndex];
+
+                    if (_player.CanInsert(newPlayerItem, beforePlayerItem))
+                    {
+                        _player.InsertItem(newPlayerItem, beforePlayerItem);
+                        if (beforePlayerItemIndex == 0)
+                        {
+                            _player.RemoveItem(beforePlayerItem);
+                            if (_player.CanInsert(beforePlayerItem, newPlayerItem))
+                            {
+                                _player.InsertItem(beforePlayerItem, newPlayerItem);
+                            }
+                        }
+                    }
+
+                    _playerItems.Insert(playerItemInPlaylistIndex, newPlayerItem);
+                    _playerItemByMediaFileIdDict.Add(oldMediaFile.Id, newPlayerItem);
+
+                    AddCurrentItemObservers();
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine(ex.Message);
+            }
+        }
+
+        private void HandleMediaQueueResetAction(IEnumerable<IMediaFile> mediaFiles)
+        {
+            if (mediaFiles == null)
+            {
+                return;
+            }
+
+            if (Status == MediaPlayerStatus.Playing)
+            {
+                _player.Pause();
+            }
+
+            RemoveCurrentItemObservers();
+
+            _player.RemoveAllItems();
+            _playerItems.Clear();
+            _playerItemByMediaFileIdDict.Clear();
+            foreach (var mediaFile in mediaFiles)
+            {
+                var url = MediaFileUrlHelper.GetUrlFor(mediaFile);
+                var newPlayerItem = CreatePlayerItem(url);
+                if (newPlayerItem == null)
+                {
+                    continue;
+                }
+
+                if (_player.CanInsert(newPlayerItem, null))
+                {
+                    _player.InsertItem(newPlayerItem, null);
+                    _playerItems.Add(newPlayerItem);
+                    _playerItemByMediaFileIdDict.Add(mediaFile.Id, newPlayerItem);
+                }
+            }
+
+            AddCurrentItemObservers();
         }
 
         private void UpdateRemoteControlButtonsVisibility()
@@ -620,6 +756,11 @@ namespace Plugin.MediaManager
 
         private void AddCurrentItemObservers()
         {
+            if (CurrentItem == null)
+            {
+                return;
+            }
+
             // ReSharper disable once PossibleNullReferenceException
             CurrentItem.AddObserver(this, _loadedTimeRangesObservationKey, NSKeyValueObservingOptions.Initial | NSKeyValueObservingOptions.New, _loadedTimeRangesObservationKey.Handle);
             CurrentItem.AddObserver(this, _statusObservationKey, NSKeyValueObservingOptions.New | NSKeyValueObservingOptions.Initial, _statusObservationKey.Handle);
@@ -631,23 +772,25 @@ namespace Plugin.MediaManager
 
         private void RemoveCurrentItemObservers()
         {
-            if (CurrentItem != null)
+            if (CurrentItem == null)
             {
-                try
-                {
-                    CurrentItem.RemoveObserver(this, _loadedTimeRangesObservationKey);
-                    CurrentItem.RemoveObserver(this, _statusObservationKey);
-                    CurrentItem.RemoveObserver(this, _playbackLikelyToKeepUpKey);
-                    CurrentItem.RemoveObserver(this, _playbackBufferFullKey);
+                return;
+            }
 
-                    NSNotificationCenter.DefaultCenter.RemoveObserver(CurrentItem);
-                }
-                catch (Exception ex)
-                {
-                    // There could be a situation where CurrentItem doesn't have an observer that we want to remove
-                    // Swallow such exception
-                    Debug.WriteLine(ex.Message);
-                }
+            try
+            {
+                CurrentItem.RemoveObserver(this, _loadedTimeRangesObservationKey);
+                CurrentItem.RemoveObserver(this, _statusObservationKey);
+                CurrentItem.RemoveObserver(this, _playbackLikelyToKeepUpKey);
+                CurrentItem.RemoveObserver(this, _playbackBufferFullKey);
+
+                NSNotificationCenter.DefaultCenter.RemoveObserver(CurrentItem);
+            }
+            catch (Exception ex)
+            {
+                // There could be a situation where CurrentItem doesn't have an observer that we want to remove
+                // Swallow such exception
+                Debug.WriteLine(ex.Message);
             }
         }
     }

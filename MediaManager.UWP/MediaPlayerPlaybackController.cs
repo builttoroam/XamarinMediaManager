@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Windows.Media;
 using Windows.Media.Core;
@@ -14,6 +15,10 @@ namespace Plugin.MediaManager
     {
         private readonly IPlaybackControllerProvider _playbackControllerProvider;
 
+        private readonly SemaphoreSlim _createPlayerSemaphor = new SemaphoreSlim(1);
+
+        private readonly CoreDispatcher _dispatcher;
+
         public MediaPlayerPlaybackController(IPlaybackControllerProvider playbackControllerProvider)
         {
             _playbackControllerProvider = playbackControllerProvider;
@@ -22,6 +27,8 @@ namespace Plugin.MediaManager
             PlaybackList = new MediaPlaybackList();
 
             Player.SystemMediaTransportControls.ButtonPressed += ButtonPressed;
+
+            _dispatcher = Window.Current.Dispatcher;
         }
 
         public MediaPlayer Player { get; private set; }
@@ -32,11 +39,29 @@ namespace Plugin.MediaManager
         {
             if (Player == null)
             {
-                await Window.Current.Dispatcher.RunAsync(CoreDispatcherPriority.High, () =>
+                try
                 {
-                    Player = new MediaPlayer();
-                    PlaybackList = new MediaPlaybackList();
-                });
+                    await Task.Run(async () =>
+                    {
+                        if (await _createPlayerSemaphor.WaitAsync(-1))
+                        {
+                            if (Player != null)
+                            {
+                                return;
+                            }
+
+                            await _dispatcher.RunAsync(CoreDispatcherPriority.High, () =>
+                            {
+                                Player = new MediaPlayer();
+                                PlaybackList = new MediaPlaybackList();
+                            });
+                        }
+                    });
+                }
+                finally
+                {
+                    _createPlayerSemaphor.Release(1);
+                }
             }
         }
 

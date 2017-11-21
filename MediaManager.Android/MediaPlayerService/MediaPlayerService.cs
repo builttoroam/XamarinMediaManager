@@ -102,7 +102,8 @@ namespace Plugin.MediaManager
 
             await base.Play(mediaFile);
 
-            if (!sameMediaFile) {
+            if (!sameMediaFile)
+            {
                 try
                 {
                     _mediaPlayer.PrepareAsync();
@@ -126,7 +127,7 @@ namespace Plugin.MediaManager
                         }
                         return;
                     } while (retryCount < 10);
-                }   
+                }
             }
         }
 
@@ -241,8 +242,15 @@ namespace Plugin.MediaManager
 
         public bool OnError(MediaPlayer mp, MediaError what, int extra)
         {
-            SessionManager.UpdatePlaybackState(PlaybackStateCompat.StateError, Position.Seconds, Enum.GetName(typeof(MediaError), what));
-            Stop();
+            var errorName = Enum.GetName(typeof(MediaError), what);
+
+            System.Diagnostics.Debug.WriteLine($"Media Player thrown an error {what} [{errorName}] and extra {extra}");
+            SessionManager.UpdatePlaybackState(PlaybackStateCompat.StateError, Position.Seconds, errorName);
+
+            // TODO Investigate why there' an error being thrown with the value -38
+            //      It happens when the player is buffering and we play/pause at that time 
+            _mediaPlayer.Reset();
+
             return true;
         }
 

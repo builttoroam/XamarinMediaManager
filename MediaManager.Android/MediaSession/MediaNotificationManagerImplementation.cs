@@ -283,10 +283,6 @@ namespace Plugin.MediaManager
             // Show
             if (!isAlreadyVisible && isVisible)
             {
-                if (Builder.MActions.Count >= MaxNumberOfActionButtons)
-                {
-                    return;
-                }
 
                 if (buttonPositionStartingFromLeft > Builder.MActions.Count)
                 {

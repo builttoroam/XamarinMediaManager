@@ -46,7 +46,7 @@ namespace Plugin.MediaManager
 
         public Dictionary<string, string> RequestHeaders { get; set; }
 
-        private MediaPlayerStatus status;
+        private MediaPlayerStatus _status;
         public virtual MediaPlayerStatus Status
         {
             get
@@ -57,8 +57,11 @@ namespace Plugin.MediaManager
             }
             private set
             {
-                status = value;
-                StatusChanged?.Invoke(this, new StatusChangedEventArgs(status));
+                if (_status != value)
+                {
+                    _status = value;
+                    StatusChanged?.Invoke(this, new StatusChangedEventArgs(_status));
+                }
             }
         }
 

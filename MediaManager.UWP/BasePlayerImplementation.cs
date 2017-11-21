@@ -43,6 +43,7 @@ namespace Plugin.MediaManager
             SubscribeToPlayerEvents();
             Player.Source = PlaybackList;
 
+            MediaQueue.QueueMediaChanged += MediaQueueMediaChanged;
             MediaQueue.CollectionChanged += MediaQueueCollectionChanged;
 
             _volumeManager.CurrentVolume = (int)Player.Volume * 100;
@@ -218,6 +219,28 @@ namespace Plugin.MediaManager
         {
             var bufferedTime = TimeSpan.FromSeconds(Player.PlaybackSession.BufferingProgress * Player.PlaybackSession.NaturalDuration.TotalSeconds);
             BufferingChanged?.Invoke(this, new BufferingChangedEventArgs(Player.PlaybackSession.BufferingProgress, bufferedTime));
+        }
+
+        private void MediaQueueMediaChanged(object sender, QueueMediaChangedEventArgs e)
+        {
+            if (e?.File == null || Player == null || PlaybackList == null)
+            {
+                return;
+            }
+
+            var playlistItemToPlay = RetrievePlaylistItem(e.File);
+            if (playlistItemToPlay == null)
+            {
+                return;
+            }
+
+            var mediaToPlayIndex = PlaybackList.Items.IndexOf(playlistItemToPlay);
+            if (mediaToPlayIndex < 0)
+            {
+                return;
+            }
+
+            PlaybackList.MoveTo((uint)mediaToPlayIndex);
         }
 
         private async void MediaQueueCollectionChanged(object sender, NotifyCollectionChangedEventArgs e)

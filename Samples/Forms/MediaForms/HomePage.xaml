@@ -19,6 +19,8 @@
                         <Label Text="Playlist"></Label>
                         <Button Text="Play Audio List"
                                 Clicked="PlaylistButton_OnClicked" />
+                        <Button Text="Play Audio List (start from second in the list)"
+                                Clicked="PlayAudioListFromSecond_OnClicked" />
                     </StackLayout>
                     <StackLayout Orientation="Horizontal"
                                  x:Name="PlaylistActionContainer">

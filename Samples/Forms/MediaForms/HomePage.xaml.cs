@@ -125,40 +125,19 @@ namespace MediaForms
 
         private async void PlaylistButton_OnClicked(object sender, EventArgs e)
         {
-            var list = new List<MediaFile>
-            {
-                new MediaFile
-                {
-                    Url = "https://audioboom.com/posts/5766044-follow-up-305.mp3?source=rss&amp;stitched=1",
-                    Type = MediaFileType.Audio,
-                    Metadata = new MediaFileMetadata
-                    {
-                        Title = "Test1"
-                    }
-                },
-                new MediaFile
-                {
-                    Url = "https://media.acast.com/mydadwroteaporno/s3e1-london-thursday15.55localtime/media.mp3",
-                    Type = MediaFileType.Audio,
-                    Metadata = new MediaFileMetadata
-                    {
-                        Title = "Test2",
-                        ArtUri = "https://d15mj6e6qmt1na.cloudfront.net/i/8457198.jpg"
-                    }
-                },
-                new MediaFile
-                {
-                    Url ="https://audioboom.com/posts/5770261-ep-306-a-theory-of-evolution.mp3?source=rss&amp;stitched=1",
-                    Type = MediaFileType.Audio,
-                    Metadata = new MediaFileMetadata
-                    {
-                        Title = "Test3",
-                        ArtUri = "https://d15mj6e6qmt1na.cloudfront.net/i/30739475.jpg"
-                    }
-                }
-            };
+            var playlist = RetrievePlaylist();
+            await CrossMediaManager.Current.Play(playlist);
 
-            await CrossMediaManager.Current.Play(list);
+            foreach (var child in PlaylistActionContainer.Children)
+            {
+                child.IsEnabled = true;
+            }
+        }
+
+        private async void PlayAudioListFromSecond_OnClicked(object sender, EventArgs e)
+        {
+            var playlist = RetrievePlaylist();
+            await CrossMediaManager.Current.Play(playlist, 1);
 
             foreach (var child in PlaylistActionContainer.Children)
             {
@@ -214,5 +193,43 @@ namespace MediaForms
         {
             CrossMediaManager.Current.MediaQueue.IsShuffled = !CrossMediaManager.Current.MediaQueue.IsShuffled;
         }
+
+        private static List<MediaFile> RetrievePlaylist()
+        {
+            var list = new List<MediaFile>
+            {
+                new MediaFile
+                {
+                    Url = "https://audioboom.com/posts/5766044-follow-up-305.mp3?source=rss&amp;stitched=1",
+                    Type = MediaFileType.Audio,
+                    Metadata = new MediaFileMetadata
+                    {
+                        Title = "Test1"
+                    }
+                },
+                new MediaFile
+                {
+                    Url = "https://media.acast.com/mydadwroteaporno/s3e1-london-thursday15.55localtime/media.mp3",
+                    Type = MediaFileType.Audio,
+                    Metadata = new MediaFileMetadata
+                    {
+                        Title = "Test2",
+                        ArtUri = "https://d15mj6e6qmt1na.cloudfront.net/i/8457198.jpg"
+                    }
+                },
+                new MediaFile
+                {
+                    Url = "https://audioboom.com/posts/5770261-ep-306-a-theory-of-evolution.mp3?source=rss&amp;stitched=1",
+                    Type = MediaFileType.Audio,
+                    Metadata = new MediaFileMetadata
+                    {
+                        Title = "Test3",
+                        ArtUri = "https://d15mj6e6qmt1na.cloudfront.net/i/30739475.jpg"
+                    }
+                }
+            };
+            return list;
+        }
+
     }
 }

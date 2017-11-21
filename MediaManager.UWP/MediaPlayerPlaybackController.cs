@@ -1,5 +1,11 @@
+using System;
+using System.Linq;
+using System.Threading.Tasks;
 using Windows.Media;
+using Windows.Media.Core;
 using Windows.Media.Playback;
+using Windows.UI.Core;
+using Windows.UI.Xaml;
 using Plugin.MediaManager.Interfaces;
 
 namespace Plugin.MediaManager
@@ -12,14 +18,36 @@ namespace Plugin.MediaManager
         {
             _playbackControllerProvider = playbackControllerProvider;
 
+            Player = new MediaPlayer();
+            PlaybackList = new MediaPlaybackList();
+
             Player.SystemMediaTransportControls.ButtonPressed += ButtonPressed;
         }
 
-        public MediaPlayer Player { get; } = new MediaPlayer();
+        public MediaPlayer Player { get; private set; }
+
+        public MediaPlaybackList PlaybackList { get; private set; }
+
+        public async Task CreatePlayerIfDoesntExist()
+        {
+            if (Player == null)
+            {
+                await Window.Current.Dispatcher.RunAsync(CoreDispatcherPriority.High, () =>
+                {
+                    Player = new MediaPlayer();
+                    PlaybackList = new MediaPlaybackList();
+                });
+            }
+        }
+
+        public void StopPlayer()
+        {
+            DisposePlayer();
+        }
 
         public void Dispose()
         {
-            Player.SystemMediaTransportControls.ButtonPressed -= ButtonPressed;
+            DisposePlayer();
         }
 
         private async void ButtonPressed(SystemMediaTransportControls sender, SystemMediaTransportControlsButtonPressedEventArgs args)
@@ -42,6 +70,83 @@ namespace Plugin.MediaManager
                     await _playbackControllerProvider.PlaybackController.Stop();
                     break;
             }
+        }
+
+        private void DisposePlayer()
+        {
+            if (Player == null)
+            {
+                return;
+            }
+
+            Player.SystemMediaTransportControls.ButtonPressed -= ButtonPressed;
+
+            DisposePlayerSources();
+            Player.Dispose();
+            Player = null;
+            PlaybackList = null;
+        }
+
+        private void DisposePlayerSources()
+        {
+            if (Player == null)
+            {
+                return;
+            }
+
+            if (Player.Source != null)
+            {
+                var source = Player.Source as MediaSource;
+                source?.Dispose();
+
+                var playbackItem = Player.Source as MediaPlaybackItem;
+                DisposePlaybackItemSource(playbackItem);
+
+                var playbackList = Player.Source as MediaPlaybackList;
+                if (playbackList?.Items?.Any() ?? false)
+                {
+                    foreach (var playbackListItem in playbackList.Items)
+                    {
+                        DisposePlaybackItemSource(playbackListItem);
+                    }
+                }
+            }
+
+            Player.Source = null;
+        }
+
+        private static void DisposePlaybackItemSource(MediaPlaybackItem item)
+        {
+            if (item?.Source == null)
+            {
+                return;
+            }
+
+            if (item.BreakSchedule.PrerollBreak != null)
+            {
+                foreach (var mpItem in item.BreakSchedule.PrerollBreak.PlaybackList.Items)
+                {
+                    mpItem.Source?.Dispose();
+                }
+            }
+            if (item.BreakSchedule.MidrollBreaks.Count != 0)
+            {
+                foreach (var mrBreak in item.BreakSchedule.MidrollBreaks)
+                {
+                    foreach (var mpItem in mrBreak.PlaybackList.Items)
+                    {
+                        mpItem.Source?.Dispose();
+                    }
+                }
+            }
+            if (item.BreakSchedule.PostrollBreak != null)
+            {
+                foreach (var mpItem in item.BreakSchedule.PostrollBreak.PlaybackList.Items)
+                {
+                    mpItem.Source?.Dispose();
+                }
+            }
+            item.Source.Dispose();
         }
     }
 }

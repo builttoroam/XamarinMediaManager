@@ -34,7 +34,7 @@ namespace Plugin.MediaManager
 
         public void StopNotifications()
         {
-            _mediaPlyerPlaybackController?.Player?.SystemMediaTransportControls.DisplayUpdater.ClearAll();
+            _mediaPlyerPlaybackController?.Player?.SystemMediaTransportControls?.DisplayUpdater?.ClearAll();
         }
 
         public void UpdateNotifications(IMediaFile mediaFile, MediaPlayerStatus status)

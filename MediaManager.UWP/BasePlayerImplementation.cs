@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Windows.Media;
 using Windows.Media.Core;
@@ -19,35 +20,87 @@ namespace Plugin.MediaManager
 {
     public class BasePlayerImplementation : IDisposable
     {
-        private readonly IMediaQueue _mediaQueue;
-        private readonly IMediaPlyerPlaybackController _mediaPlyerPlaybackController;
         private readonly IVolumeManager _volumeManager;
 
+        private readonly IMediaPlyerPlaybackController _mediaPlyerPlaybackController;
         private readonly IDictionary<Guid, MediaPlaybackItem> _playbackItemByMediaFileId = new Dictionary<Guid, MediaPlaybackItem>();
 
-        protected readonly MediaPlayer Player;
+        private MediaPlayerStatus _status;
+        private Timer _playProgressTimer;
 
-        protected readonly MediaPlaybackList PlaybackList = new MediaPlaybackList();
+        protected MediaPlayer Player => _mediaPlyerPlaybackController.Player;
+        protected MediaPlaybackList PlaybackList => _mediaPlyerPlaybackController.PlaybackList;
+
+        protected IMediaQueue MediaQueue { get; private set; }
 
         public BasePlayerImplementation(IMediaQueue mediaQueue, IMediaPlyerPlaybackController mediaPlyerPlaybackController, IVolumeManager volumeManager)
         {
             _mediaPlyerPlaybackController = mediaPlyerPlaybackController;
-            _mediaQueue = mediaQueue;
+            MediaQueue = mediaQueue;
             _volumeManager = volumeManager;
 
-            Player = _mediaPlyerPlaybackController.Player;
+            SetupPlaybackProgressTimer();
+            SubscribeToPlayerEvents();
+            Player.Source = PlaybackList;
 
-            _mediaQueue.CollectionChanged += MediaQueueCollectionChanged;
+            MediaQueue.CollectionChanged += MediaQueueCollectionChanged;
 
             _volumeManager.CurrentVolume = (int)Player.Volume * 100;
             _volumeManager.Muted = Player.IsMuted;
             _volumeManager.VolumeChanged += VolumeChanged;
         }
 
+        public event StatusChangedEventHandler StatusChanged;
+        public event PlayingChangedEventHandler PlayingChanged;
+        public event BufferingChangedEventHandler BufferingChanged;
+        public event MediaFinishedEventHandler MediaFinished;
+        public event MediaFailedEventHandler MediaFailed;
+
+        public MediaPlayerStatus Status
+        {
+            get => _status;
+            protected set
+            {
+                _status = value;
+                StatusChanged?.Invoke(this, new StatusChangedEventArgs(_status));
+            }
+        }
+
+        public virtual async Task Play(IMediaFile mediaFile = null)
+        {
+            if (Player == null)
+            {
+                await _mediaPlyerPlaybackController.CreatePlayerIfDoesntExist();
+
+                SubscribeToPlayerEvents();
+                Player.Source = PlaybackList;
+            }
+        }
+
+        public virtual Task Stop()
+        {
+            if (Player == null)
+            {
+                return Task.CompletedTask;
+            }
+
+            _playProgressTimer.Change(0, int.MaxValue);
+            Player.Pause();
+
+            _playbackItemByMediaFileId.Clear();
+            UnsubscribeFromPlayerEvents();
+            _mediaPlyerPlaybackController.StopPlayer();
+
+            return Task.CompletedTask;
+        }
+
         public void Dispose()
         {
-            _mediaQueue.CollectionChanged -= MediaQueueCollectionChanged;
+            UnsubscribeFromPlayerEvents();
+
+            MediaQueue.CollectionChanged -= MediaQueueCollectionChanged;
             _volumeManager.VolumeChanged -= VolumeChanged;
+
             _mediaPlyerPlaybackController?.Dispose();
         }
 
@@ -104,12 +157,77 @@ namespace Plugin.MediaManager
             return null;
         }
 
+        protected void HandlePlaybackFailure(string errorMsg, Exception exception)
+        {
+            _status = MediaPlayerStatus.Failed;
+            _playProgressTimer.Change(0, int.MaxValue);
+
+            MediaFailed?.Invoke(this, new MediaFailedEventArgs(errorMsg, exception));
+        }
+
+        private void PlayerMediaFailed(MediaPlayer mediaPlayer, MediaPlayerFailedEventArgs e)
+        {
+            HandlePlaybackFailure(e.ErrorMessage, e.ExtendedErrorCode);
+        }
+
+        private void PlayerMediaEnded(MediaPlayer mediaPlayer, object o)
+        {
+            MediaFinished?.Invoke(this, new MediaFinishedEventArgs(MediaQueue.Current));
+        }
+
+        private void PlaybackSessionStateChanged(MediaPlaybackSession playbackSession, object o)
+        {
+            switch (playbackSession.PlaybackState)
+            {
+                case MediaPlaybackState.None:
+                    _playProgressTimer.Change(0, int.MaxValue);
+                    break;
+                case MediaPlaybackState.Opening:
+                    Status = MediaPlayerStatus.Loading;
+                    _playProgressTimer.Change(0, int.MaxValue);
+                    break;
+                case MediaPlaybackState.Buffering:
+                    Status = MediaPlayerStatus.Buffering;
+                    _playProgressTimer.Change(0, int.MaxValue);
+                    break;
+                case MediaPlaybackState.Playing:
+                    if (playbackSession.PlaybackRate <= 0 && playbackSession.Position == TimeSpan.Zero)
+                    {
+                        Status = MediaPlayerStatus.Stopped;
+                    }
+                    else
+                    {
+                        Status = MediaPlayerStatus.Playing;
+                        _playProgressTimer.Change(0, 50);
+                    }
+                    break;
+                case MediaPlaybackState.Paused:
+                    Status = MediaPlayerStatus.Paused;
+                    _playProgressTimer.Change(0, int.MaxValue);
+                    break;
+            }
+        }
+
+        private void PlaybackSessionBufferingStarted(MediaPlaybackSession playbackSession, object o)
+        {
+            var bufferedTime = TimeSpan.FromSeconds(playbackSession.BufferingProgress * playbackSession.NaturalDuration.TotalSeconds);
+            BufferingChanged?.Invoke(this, new BufferingChangedEventArgs(playbackSession.BufferingProgress, bufferedTime));
+        }
+
+        private void PlaybackSessionBufferingProgressChanged(MediaPlaybackSession playbackSession, object args)
+        {
+            var bufferedTime = TimeSpan.FromSeconds(Player.PlaybackSession.BufferingProgress * Player.PlaybackSession.NaturalDuration.TotalSeconds);
+            BufferingChanged?.Invoke(this, new BufferingChangedEventArgs(Player.PlaybackSession.BufferingProgress, bufferedTime));
+        }
+
         private async void MediaQueueCollectionChanged(object sender, NotifyCollectionChangedEventArgs e)
         {
             if (e == null)
             {
                 return;
             }
+
+            await _mediaPlyerPlaybackController.CreatePlayerIfDoesntExist();
 
             switch (e.Action)
             {
@@ -158,6 +276,11 @@ namespace Plugin.MediaManager
 
                 foreach (var newMediaFile in newMediaFiles)
                 {
+                    if (_playbackItemByMediaFileId.ContainsKey(newMediaFile.Id))
+                    {
+                        continue;
+                    }
+
                     var newPlaybackItem = await CreateMediaPlaybackItem(newMediaFile);
 
                     PlaybackList.Items.Add(newPlaybackItem);
@@ -310,6 +433,46 @@ namespace Plugin.MediaManager
                 playbaItemDisplayProperties.Thumbnail = RandomAccessStreamReference.CreateFromUri(new Uri(mediaFile.Metadata.ArtUri));
             }
             playbackItem.ApplyDisplayProperties(playbaItemDisplayProperties);
+        }
+
+        private void SubscribeToPlayerEvents()
+        {
+            Player.MediaFailed += PlayerMediaFailed;
+            Player.MediaEnded += PlayerMediaEnded;
+            Player.PlaybackSession.PlaybackStateChanged += PlaybackSessionStateChanged;
+            Player.PlaybackSession.BufferingStarted += PlaybackSessionBufferingStarted;
+            Player.PlaybackSession.BufferingProgressChanged += PlaybackSessionBufferingProgressChanged;
+        }
+
+        private void UnsubscribeFromPlayerEvents()
+        {
+            if (Player == null)
+            {
+                return;
+            }
+
+            Player.MediaFailed -= PlayerMediaFailed;
+            Player.MediaEnded -= PlayerMediaEnded;
+            Player.PlaybackSession.PlaybackStateChanged -= PlaybackSessionStateChanged;
+            Player.PlaybackSession.BufferingStarted -= PlaybackSessionBufferingStarted;
+            Player.PlaybackSession.BufferingProgressChanged -= PlaybackSessionBufferingProgressChanged;
+        }
+
+        private void SetupPlaybackProgressTimer()
+        {
+            _playProgressTimer = new Timer(state =>
+            {
+                if (Player?.PlaybackSession?.PlaybackState != MediaPlaybackState.Playing)
+                {
+                    return;
+                }
+                var progress = Player.PlaybackSession.Position.TotalSeconds / Player.PlaybackSession.NaturalDuration.TotalSeconds;
+                if (double.IsInfinity(progress))
+                {
+                    progress = 0;
+                }
+                PlayingChanged?.Invoke(this, new PlayingChangedEventArgs(progress, Player.PlaybackSession.Position, Player.PlaybackSession.NaturalDuration));
+            }, null, 0, int.MaxValue);
         }
     }
 }

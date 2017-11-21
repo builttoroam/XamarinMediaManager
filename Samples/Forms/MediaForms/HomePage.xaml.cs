@@ -58,12 +58,18 @@ namespace MediaForms
 
             Device.BeginInvokeOnMainThread(() =>
             {
-                PlayButton.IsEnabled = e.Status == MediaPlayerStatus.Paused || e.Status == MediaPlayerStatus.Stopped;
+                PlayButton.IsEnabled = e.Status == MediaPlayerStatus.Paused;
                 StopButton.IsEnabled = e.Status == MediaPlayerStatus.Playing;
                 PauseButton.IsEnabled = e.Status == MediaPlayerStatus.Playing;
 
                 PlayerStatus.Text = e.Status.ToString();
                 IsBufferingIndicator.IsVisible = e.Status == MediaPlayerStatus.Buffering || e.Status == MediaPlayerStatus.Loading;
+
+                if (e.Status == MediaPlayerStatus.Stopped)
+                {
+                    NextButton.IsEnabled = false;
+                    PreviousButton.IsEnabled = false;
+                }
             });
         }
 

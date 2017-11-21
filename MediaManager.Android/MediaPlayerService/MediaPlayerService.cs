@@ -14,7 +14,7 @@ using Plugin.MediaManager.Abstractions.EventArguments;
 namespace Plugin.MediaManager
 {
     [Service]
-    [IntentFilter(new[] { ActionPlay, ActionPause, ActionStop, ActionTogglePlayback, ActionNext, ActionPrevious })]
+    [IntentFilter(new[] { ActionPlay, ActionPause, ActionStop, ActionTogglePlayback, ActionNext, ActionPrevious, ActionStepBackward, ActionStepForward })]
     public class MediaPlayerService : MediaServiceBase,
         MediaPlayer.IOnBufferingUpdateListener,
         MediaPlayer.IOnCompletionListener,
@@ -78,7 +78,7 @@ namespace Plugin.MediaManager
 
         public override void SetMediaPlayerOptions()
         {
-            //Tell our player to sream music
+            //Tell our player to stream music
             _mediaPlayer.SetAudioStreamType(Stream.Music);
 
             //Wake mode will be partial to keep the CPU still running under lock screen
@@ -240,16 +240,16 @@ namespace Plugin.MediaManager
             OnMediaFinished(new MediaFinishedEventArgs(CurrentFile));
         }
 
-        public bool OnError(MediaPlayer mp, MediaError what, int extra)
+        public bool OnError(MediaPlayer mediaPlayer, MediaError what, int extra)
         {
             var errorName = Enum.GetName(typeof(MediaError), what);
 
             System.Diagnostics.Debug.WriteLine($"Media Player thrown an error {what} [{errorName}] and extra {extra}");
             SessionManager.UpdatePlaybackState(PlaybackStateCompat.StateError, Position.Seconds, errorName);
 
-            // TODO Investigate why there' an error being thrown with the value -38
+            // TODO Investigate why there're an error being thrown with the value -38
             //      It happens when the player is buffering and we play/pause at that time 
-            _mediaPlayer.Reset();
+            mediaPlayer?.Reset();
 
             return true;
         }

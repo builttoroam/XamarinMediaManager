@@ -14,7 +14,6 @@ using Java.Util.Concurrent;
 
 namespace Plugin.MediaManager
 {
-    public delegate IMediaFile GetNextSong();
     public class AudioPlayerBase<TService> : IAudioPlayer where TService : MediaServiceBase
     {
         public event BufferingChangedEventHandler BufferingChanged;

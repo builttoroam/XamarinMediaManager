@@ -315,7 +315,6 @@ namespace Plugin.MediaManager
 
 #if __IOS__ || __TVOS__
             var avSession = AVAudioSession.SharedInstance();
-
             // By setting the Audio Session category to AVAudioSessionCategorPlayback, audio will continue to play when the silent switch is enabled, or when the screen is locked.
             avSession.SetCategory(AVAudioSessionCategory.Playback);
             avSession.SetActive(true, out var activationError);

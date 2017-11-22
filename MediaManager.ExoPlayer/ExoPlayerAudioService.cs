@@ -37,7 +37,8 @@ namespace Plugin.MediaManager.ExoPlayer
     [IntentFilter(new[] { ActionPlay, ActionPause, ActionStop, ActionTogglePlayback, ActionNext, ActionPrevious })]
     public class ExoPlayerAudioService : MediaServiceBase,
         IExoPlayerEventListener,
-        TrackSelector.IEventListener, ExtractorMediaSource.IEventListener
+        //TrackSelector.IEventListener,
+        ExtractorMediaSource.IEventListener
     {
         private SimpleExoPlayer _mediaPlayer;
 
@@ -85,7 +86,7 @@ namespace Plugin.MediaManager.ExoPlayer
         {
             var mainHandler = new Handler();
             var trackSelector = new DefaultTrackSelector(mainHandler);
-            trackSelector.AddListener(this);
+            //trackSelector.AddListener(this);
             var loadControl = new DefaultLoadControl();
             if (_mediaPlayer == null)
             {
@@ -186,10 +187,10 @@ namespace Plugin.MediaManager.ExoPlayer
             Console.WriteLine("OnTimelineChanged");
         }
 
-        public void OnTrackSelectionsChanged(TrackSelections p0)
-        {
-            Console.WriteLine("TrackSelectionChanged");
-        }
+        //public void OnTrackSelectionsChanged(TrackSelections p0)
+        //{
+        //    Console.WriteLine("TrackSelectionChanged");
+        //}
 
         /* TODO: Implement IOutput Interface => https://github.com/martijn00/ExoPlayerXamarin/issues/38
          */

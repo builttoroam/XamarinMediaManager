@@ -329,7 +329,7 @@ namespace Plugin.MediaManager
             _player.AddPeriodicTimeObserver(new CMTime(1, 2), DispatchQueue.MainQueue, HandleTimeChange);
         }
 
-        private async void MediaQueueOnCollectionChanged(object sender, NotifyCollectionChangedEventArgs e)
+        private void MediaQueueOnCollectionChanged(object sender, NotifyCollectionChangedEventArgs e)
         {
             if (e == null)
             {

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -51,11 +51,11 @@ namespace Plugin.MediaManager.ExoPlayer
             {
                 double parsedPosition;
                 var position = _mediaPlayer?.CurrentPosition;
-                if (position > 0 && Double.TryParse(position.ToString(), out parsedPosition)) 
+                if (position > 0 && Double.TryParse(position.ToString(), out parsedPosition))
                     return TimeSpan.FromMilliseconds(parsedPosition);
                 return TimeSpan.Zero;
             }
-        } 
+        }
 
         public override TimeSpan Duration
         {
@@ -197,6 +197,7 @@ namespace Plugin.MediaManager.ExoPlayer
         //{
         //    Console.WriteLine("OnMetadata");
         //}
+
         #endregion
 
         private MediaPlayerStatus GetStatusByIntValue(int state)
@@ -269,23 +270,25 @@ namespace Plugin.MediaManager.ExoPlayer
 
         private void OnBuffering()
         {
-            if(_mediaPlayer == null || _mediaPlayer.BufferedPosition > TimeSpan.MaxValue.TotalMilliseconds - 100) return;
+            if (_mediaPlayer == null || _mediaPlayer.BufferedPosition > TimeSpan.MaxValue.TotalMilliseconds - 100) return;
 
-                OnBufferingChanged(
-                    new BufferingChangedEventArgs(
-                        _mediaPlayer.BufferedPercentage, 
-                        TimeSpan.FromMilliseconds(Convert.ToInt64(_mediaPlayer.BufferedPosition))));
+            OnBufferingChanged(
+                new BufferingChangedEventArgs(
+                    _mediaPlayer.BufferedPercentage,
+                    TimeSpan.FromMilliseconds(Convert.ToInt64(_mediaPlayer.BufferedPosition))));
         }
 
         private IMediaSource GetSource(string url)
         {
-            string escapedUrl = Uri.EscapeDataString(url);
-            var uri = Android.Net.Uri.Parse(escapedUrl);
-            var factory =  URLUtil.IsHttpUrl(escapedUrl) || URLUtil.IsHttpsUrl(escapedUrl) ? GetHttpFactory() : new FileDataSourceFactory();
+            if (string.IsNullOrWhiteSpace(url))
+            {
+                return null;
+            }
+
+            var uri = Android.Net.Uri.Parse(url);
+            var factory = URLUtil.IsHttpUrl(url) || URLUtil.IsHttpsUrl(url) ? GetHttpFactory() : new FileDataSourceFactory();
             var extractorFactory = new DefaultExtractorsFactory();
-            return new ExtractorMediaSource(uri
-                , factory
-                , extractorFactory, null, this);
+            return new ExtractorMediaSource(uri, factory, extractorFactory, null, this);
         }
 
         private IDataSourceFactory GetHttpFactory()
@@ -299,7 +302,7 @@ namespace Plugin.MediaManager.ExoPlayer
         {
             throw new NotImplementedException();
         }
-        
+
         public void OnLoadError(IOException ex)
         {
             OnMediaFileFailed(new MediaFileFailedEventArgs(ex, CurrentFile));
@@ -310,6 +313,7 @@ namespace Plugin.MediaManager.ExoPlayer
     {
         private DefaultHttpDataSourceFactory _httpFactory;
         private Dictionary<string, string> _headers;
+
         public HttpSourceFactory(DefaultHttpDataSourceFactory httpFactory, Dictionary<string, string> headers)
         {
             _httpFactory = httpFactory;
@@ -332,11 +336,6 @@ namespace Plugin.MediaManager.ExoPlayer
                 source?.SetRequestProperty(header.Key, header.Value);
             }
             return source;
-        }
-
-        public IDataSource createDataSource()
-        {
-            return CreateDataSource();
         }
     }
 

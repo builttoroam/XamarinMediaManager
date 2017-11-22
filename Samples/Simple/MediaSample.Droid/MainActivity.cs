@@ -35,7 +35,7 @@ namespace MediaSample.Droid
 
         private Android.Support.V7.Widget.Toolbar toolbar;
 
-        private const bool ShouldUseExoPlayer = false;
+        private const bool ShouldUseExoPlayer = true;
 
         protected override void OnCreate(Bundle savedInstanceState)
         {

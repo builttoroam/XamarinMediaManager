@@ -13,7 +13,6 @@ using Windows.Storage.Streams;
 using Plugin.MediaManager.Abstractions;
 using Plugin.MediaManager.Abstractions.Enums;
 using Plugin.MediaManager.Abstractions.EventArguments;
-using Plugin.MediaManager.Abstractions.Implementations;
 using Plugin.MediaManager.Interfaces;
 
 namespace Plugin.MediaManager
@@ -23,7 +22,9 @@ namespace Plugin.MediaManager
         private readonly IVolumeManager _volumeManager;
 
         private readonly IMediaPlyerPlaybackController _mediaPlyerPlaybackController;
-        private readonly IDictionary<Guid, MediaPlaybackItem> _playbackItemByMediaFileId = new Dictionary<Guid, MediaPlaybackItem>();
+        private readonly IDictionary<Guid, MediaPlaybackItem> _playbackItemByMediaFileIdDict = new Dictionary<Guid, MediaPlaybackItem>();
+
+        private readonly SemaphoreSlim _mediaQueueCollectionChangedSemaphor = new SemaphoreSlim(1);
 
         private MediaPlayerStatus _status;
         private Timer _playProgressTimer;
@@ -161,7 +162,7 @@ namespace Plugin.MediaManager
             _playProgressTimer.Change(0, int.MaxValue);
             Player.Pause();
 
-            _playbackItemByMediaFileId.Clear();
+            _playbackItemByMediaFileIdDict.Clear();
             UnsubscribeFromPlayerEvents();
             _mediaPlyerPlaybackController.StopPlayer();
 
@@ -225,9 +226,9 @@ namespace Plugin.MediaManager
                 return null;
             }
 
-            if (_playbackItemByMediaFileId.ContainsKey(mediaFile.Id))
+            if (_playbackItemByMediaFileIdDict.ContainsKey(mediaFile.Id))
             {
-                return _playbackItemByMediaFileId[mediaFile.Id];
+                return _playbackItemByMediaFileIdDict[mediaFile.Id];
             }
 
             return null;
@@ -327,23 +328,33 @@ namespace Plugin.MediaManager
 
             await _mediaPlyerPlaybackController.CreatePlayerIfDoesntExist();
 
-            switch (e.Action)
+            try
             {
-                case NotifyCollectionChangedAction.Add:
-                    await HandleMediaQueueAddAction(e);
-                    break;
-                case NotifyCollectionChangedAction.Move:
-                    // The reality is that this scenario is never going to happen. Even when re-ordering or shuffling happens, the list is being regenerated (Reset)
-                    break;
-                case NotifyCollectionChangedAction.Remove:
-                    HandleMediaQueueRemoveAction(e);
-                    break;
-                case NotifyCollectionChangedAction.Replace:
-                    await HandleMediaQueueReplaceAction(e);
-                    break;
-                case NotifyCollectionChangedAction.Reset:
-                    await HandleMediaQueueResetAction(sender as IEnumerable<IMediaFile>);
-                    break;
+                if (await _mediaQueueCollectionChangedSemaphor.WaitAsync(-1))
+                {
+                    switch (e.Action)
+                    {
+                        case NotifyCollectionChangedAction.Add:
+                            await HandleMediaQueueAddAction(e);
+                            break;
+                        case NotifyCollectionChangedAction.Move:
+                            // The reality is that this scenario is never going to happen. Even when re-ordering or shuffling happens, the list is being regenerated (Reset)
+                            break;
+                        case NotifyCollectionChangedAction.Remove:
+                            HandleMediaQueueRemoveAction(e);
+                            break;
+                        case NotifyCollectionChangedAction.Replace:
+                            await HandleMediaQueueReplaceAction(e);
+                            break;
+                        case NotifyCollectionChangedAction.Reset:
+                            await HandleMediaQueueResetAction(sender as IEnumerable<IMediaFile>);
+                            break;
+                    }
+                }
+            }
+            finally
+            {
+                _mediaQueueCollectionChangedSemaphor.Release(1);
             }
         }
 
@@ -374,15 +385,22 @@ namespace Plugin.MediaManager
 
                 foreach (var newMediaFile in newMediaFiles)
                 {
-                    if (_playbackItemByMediaFileId.ContainsKey(newMediaFile.Id))
+                    if (_playbackItemByMediaFileIdDict.ContainsKey(newMediaFile.Id))
                     {
                         continue;
                     }
 
                     var newPlaybackItem = await CreateMediaPlaybackItem(newMediaFile);
 
-                    PlaybackList.Items.Add(newPlaybackItem);
-                    _playbackItemByMediaFileId.Add(newMediaFile.Id, newPlaybackItem);
+                    if (e.NewStartingIndex < 0)
+                    {
+                        PlaybackList.Items.Add(newPlaybackItem);
+                    }
+                    else
+                    {
+                        PlaybackList.Items.Insert(e.NewStartingIndex, newPlaybackItem);
+                    }
+                    _playbackItemByMediaFileIdDict.Add(newMediaFile.Id, newPlaybackItem);
                 }
             }
         }
@@ -424,12 +442,12 @@ namespace Plugin.MediaManager
                     }
 
                     PlaybackList.Items.RemoveAt(mediaFileInPlaylistIndex);
-                    _playbackItemByMediaFileId.Remove(oldMediaFile.Id);
+                    _playbackItemByMediaFileIdDict.Remove(oldMediaFile.Id);
 
                     var newPlaybackItem = await CreateMediaPlaybackItem(newMediaFile);
 
                     PlaybackList.Items.Insert(mediaFileInPlaylistIndex, newPlaybackItem);
-                    _playbackItemByMediaFileId.Add(oldMediaFile.Id, newPlaybackItem);
+                    _playbackItemByMediaFileIdDict.Add(oldMediaFile.Id, newPlaybackItem);
                 }
             }
             catch (Exception ex)
@@ -463,7 +481,7 @@ namespace Plugin.MediaManager
                     }
 
                     PlaybackList.Items.RemoveAt(mediaFileInPlaylistIndex);
-                    _playbackItemByMediaFileId.Remove(mediaFile.Id);
+                    _playbackItemByMediaFileIdDict.Remove(mediaFile.Id);
                     if (PlaybackList.Items.Any() && isMediaFileInPlaylistIndexCurrentlyPlaying)
                     {
                         if (mediaFileInPlaylistIndex == 0)
@@ -492,13 +510,13 @@ namespace Plugin.MediaManager
             }
 
             PlaybackList.Items.Clear();
-            _playbackItemByMediaFileId.Clear();
+            _playbackItemByMediaFileIdDict.Clear();
             foreach (var mediaFile in mediaFiles)
             {
                 var newPlaybackItem = await CreateMediaPlaybackItem(mediaFile);
 
                 PlaybackList.Items.Add(newPlaybackItem);
-                _playbackItemByMediaFileId.Add(mediaFile.Id, newPlaybackItem);
+                _playbackItemByMediaFileIdDict.Add(mediaFile.Id, newPlaybackItem);
             }
         }
 

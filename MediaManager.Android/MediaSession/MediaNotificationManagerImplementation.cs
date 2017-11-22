@@ -272,7 +272,6 @@ namespace Plugin.MediaManager
             {
                 return;
             }
-
             var isAlreadyVisible = IsButtonVisible(actionbutton);
             if (isAlreadyVisible && isVisible ||
                 !isAlreadyVisible && !isVisible)

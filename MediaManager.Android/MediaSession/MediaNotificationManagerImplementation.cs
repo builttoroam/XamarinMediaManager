@@ -273,8 +273,7 @@ namespace Plugin.MediaManager
                 return;
             }
             var isAlreadyVisible = IsButtonVisible(actionbutton);
-            if (isAlreadyVisible && isVisible ||
-                !isAlreadyVisible && !isVisible)
+            if ((isAlreadyVisible && isVisible) || (!isAlreadyVisible && !isVisible))
             {
                 return;
             }
@@ -282,7 +281,6 @@ namespace Plugin.MediaManager
             // Show
             if (!isAlreadyVisible && isVisible)
             {
-
                 if (buttonPositionStartingFromLeft > Builder.MActions.Count)
                 {
                     Builder.MActions.Add(actionbutton);

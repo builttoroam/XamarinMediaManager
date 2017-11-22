@@ -16,7 +16,6 @@ using Plugin.MediaManager.Abstractions;
 
 namespace MediaSample.Droid
 {
-
     using Plugin.MediaManager.Abstractions.Enums;
     using Plugin.MediaManager.MediaSession;
 
@@ -130,7 +129,6 @@ namespace MediaSample.Droid
                 });
             };
 
-
             ViewModel.MediaPlayer.StatusChanged += (sender, e) =>
             {
                 Console.WriteLine($"StausChanged {e.Status}");
@@ -150,7 +148,6 @@ namespace MediaSample.Droid
                     }
                     catch (Exception ex)
                     {
-
                         Console.WriteLine($"Exception : StausChanged: {ex.Message}");
                     }
 
@@ -226,5 +223,3 @@ namespace MediaSample.Droid
         }
     }
 }
-
-

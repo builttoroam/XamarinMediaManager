@@ -265,11 +265,6 @@ namespace Plugin.MediaManager
             HandlePlaybackFailure(e.ErrorMessage, e.ExtendedErrorCode);
         }
 
-        private void PlayerMediaEnded(MediaPlayer mediaPlayer, object o)
-        {
-            MediaFinished?.Invoke(this, new MediaFinishedEventArgs(MediaQueue.Current));
-        }
-
         private void PlaybackSessionStateChanged(MediaPlaybackSession playbackSession, object o)
         {
             Debug.WriteLine($"[Player] State changed {playbackSession.PlaybackState}");
@@ -574,7 +569,6 @@ namespace Plugin.MediaManager
         private void SubscribeToPlayerEvents()
         {
             Player.MediaFailed += PlayerMediaFailed;
-            Player.MediaEnded += PlayerMediaEnded;
             Player.PlaybackSession.PlaybackStateChanged += PlaybackSessionStateChanged;
             Player.PlaybackSession.BufferingStarted += PlaybackSessionBufferingStarted;
             Player.PlaybackSession.BufferingProgressChanged += PlaybackSessionBufferingProgressChanged;
@@ -590,7 +584,6 @@ namespace Plugin.MediaManager
             }
 
             Player.MediaFailed -= PlayerMediaFailed;
-            Player.MediaEnded -= PlayerMediaEnded;
             Player.PlaybackSession.PlaybackStateChanged -= PlaybackSessionStateChanged;
             Player.PlaybackSession.BufferingStarted -= PlaybackSessionBufferingStarted;
             Player.PlaybackSession.BufferingProgressChanged -= PlaybackSessionBufferingProgressChanged;

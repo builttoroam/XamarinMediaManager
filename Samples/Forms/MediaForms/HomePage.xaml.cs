@@ -33,23 +33,36 @@ namespace MediaForms
         protected override void OnAppearing()
         {
             base.OnAppearing();
-            CrossMediaManager.Current.StatusChanged += CurrentOnStatusChanged;
-            CrossMediaManager.Current.MediaQueue.CollectionChanged += MediaQueueCollectionChanged;
-        }
 
-        private void MediaQueueCollectionChanged(object sender, NotifyCollectionChangedEventArgs notifyCollectionChangedEventArgs)
-        {
-            Device.BeginInvokeOnMainThread(() =>
-            {
-                NextButton.IsEnabled = CrossMediaManager.Current.MediaQueue.HasNext();
-                PreviousButton.IsEnabled = CrossMediaManager.Current.MediaQueue.HasPrevious();
-            });
+            CrossMediaManager.Current.PlayingChanged += PlaybackChanged;
+            CrossMediaManager.Current.StatusChanged += CurrentOnStatusChanged;
+
+            CrossMediaManager.Current.MediaFinished += MediaFinished;
+            CrossMediaManager.Current.MediaQueue.CollectionChanged += MediaQueueCollectionChanged;
         }
 
         protected override void OnDisappearing()
         {
-            CrossMediaManager.Current.StatusChanged -= CurrentOnStatusChanged;
             base.OnDisappearing();
+
+            CrossMediaManager.Current.PlayingChanged -= PlaybackChanged;
+            CrossMediaManager.Current.StatusChanged -= CurrentOnStatusChanged;
+
+            CrossMediaManager.Current.MediaFinished -= MediaFinished;
+            CrossMediaManager.Current.MediaQueue.CollectionChanged -= MediaQueueCollectionChanged;
+        }
+
+        private void PlaybackChanged(object sender, PlayingChangedEventArgs e)
+        {
+            if (e == null)
+            {
+                return;
+            }
+
+            Device.BeginInvokeOnMainThread(() =>
+            {
+                //PlaybackSlider.Value = e.Progress;
+            });
         }
 
         private void CurrentOnStatusChanged(object sender, StatusChangedEventArgs e)
@@ -70,6 +83,24 @@ namespace MediaForms
                     NextButton.IsEnabled = false;
                     PreviousButton.IsEnabled = false;
                 }
+            });
+        }
+
+        private void MediaFinished(object sender, MediaFinishedEventArgs e)
+        {
+            Device.BeginInvokeOnMainThread(() =>
+            {
+                NextButton.IsEnabled = CrossMediaManager.Current.MediaQueue.HasNext();
+                PreviousButton.IsEnabled = CrossMediaManager.Current.MediaQueue.HasPrevious();
+            });
+        }
+
+        private void MediaQueueCollectionChanged(object sender, NotifyCollectionChangedEventArgs e)
+        {
+            Device.BeginInvokeOnMainThread(() =>
+            {
+                NextButton.IsEnabled = CrossMediaManager.Current.MediaQueue.HasNext();
+                PreviousButton.IsEnabled = CrossMediaManager.Current.MediaQueue.HasPrevious();
             });
         }
 
@@ -231,5 +262,17 @@ namespace MediaForms
             return list;
         }
 
+        private void PlaybackSlideValueChanged(object sender, ValueChangedEventArgs e)
+        {
+            if (e == null || PlaybackSlider.Maximum == 0)
+            {
+                return;
+            }
+
+            var progressInPercent = e.NewValue / PlaybackSlider.Maximum;
+
+            var seekTo = CrossMediaManager.Current.AudioPlayer.Duration.TotalMilliseconds * progressInPercent;
+            CrossMediaManager.Current.Seek(TimeSpan.FromMilliseconds(seekTo));
+        }
     }
 }

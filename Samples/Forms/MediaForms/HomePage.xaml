@@ -74,6 +74,12 @@
                                            IsVisible="False" />
                     </StackLayout>
 
+                    <StackLayout>
+                        <Slider x:Name="PlaybackSlider"
+                                Minimum="0"
+                                ValueChanged="PlaybackSlideValueChanged" />
+                    </StackLayout>
+
                     <StackLayout Orientation="Horizontal">
                         <Label x:Name="volumeLabel"
                                Text="Volume (0-100):"

@@ -34,6 +34,24 @@ namespace Plugin.MediaManager
 
         protected IMediaQueue MediaQueue { get; private set; }
 
+        public TimeSpan Duration => Player?.PlaybackSession.NaturalDuration ?? TimeSpan.Zero;
+        public TimeSpan Position => Player?.PlaybackSession.Position ?? TimeSpan.Zero;
+
+        public Dictionary<string, string> RequestHeaders { get; set; }
+
+        public TimeSpan Buffered
+        {
+            get
+            {
+                if (Player == null)
+                {
+                    return TimeSpan.Zero;
+                }
+
+                return TimeSpan.FromMilliseconds(Player.PlaybackSession.BufferingProgress * Player.PlaybackSession.NaturalDuration.TotalMilliseconds);
+            }
+        }
+
         public BasePlayerImplementation(IMediaQueue mediaQueue, IMediaPlyerPlaybackController mediaPlyerPlaybackController, IVolumeManager volumeManager)
         {
             _mediaPlyerPlaybackController = mediaPlyerPlaybackController;
@@ -254,6 +272,8 @@ namespace Plugin.MediaManager
 
         private void PlaybackSessionStateChanged(MediaPlaybackSession playbackSession, object o)
         {
+            Debug.WriteLine($"[Player] State changed {playbackSession.PlaybackState}");
+
             switch (playbackSession.PlaybackState)
             {
                 case MediaPlaybackState.None:
@@ -558,6 +578,8 @@ namespace Plugin.MediaManager
             Player.PlaybackSession.PlaybackStateChanged += PlaybackSessionStateChanged;
             Player.PlaybackSession.BufferingStarted += PlaybackSessionBufferingStarted;
             Player.PlaybackSession.BufferingProgressChanged += PlaybackSessionBufferingProgressChanged;
+
+            PlaybackList.CurrentItemChanged += PlaybackListCurrentItemChanged;
         }
 
         private void UnsubscribeFromPlayerEvents()
@@ -572,6 +594,28 @@ namespace Plugin.MediaManager
             Player.PlaybackSession.PlaybackStateChanged -= PlaybackSessionStateChanged;
             Player.PlaybackSession.BufferingStarted -= PlaybackSessionBufferingStarted;
             Player.PlaybackSession.BufferingProgressChanged -= PlaybackSessionBufferingProgressChanged;
+
+            PlaybackList.CurrentItemChanged -= PlaybackListCurrentItemChanged;
+        }
+
+        private void PlaybackListCurrentItemChanged(MediaPlaybackList sender, CurrentMediaPlaybackItemChangedEventArgs e)
+        {
+            if (e == null)
+            {
+                return;
+            }
+
+            switch (e.Reason)
+            {
+                case MediaPlaybackItemChangedReason.EndOfStream:
+                    HandleMediaFinishedPlayback();
+                    break;
+            }
+        }
+
+        private void HandleMediaFinishedPlayback()
+        {
+            MediaFinished?.Invoke(this, new MediaFinishedEventArgs(MediaQueue.Current));
         }
 
         private void SetupPlaybackProgressTimer()

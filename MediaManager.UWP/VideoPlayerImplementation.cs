@@ -41,10 +41,7 @@ namespace Plugin.MediaManager
                     TimeSpan.FromMilliseconds(Player.PlaybackSession.BufferingProgress *
                                               Player.PlaybackSession.NaturalDuration.TotalMilliseconds);
             }
-        }
-
-        public TimeSpan Duration => Player?.PlaybackSession.NaturalDuration ?? TimeSpan.Zero;
-        public TimeSpan Position => Player?.PlaybackSession.Position ?? TimeSpan.Zero;
+        }        
 
         /// <summary>
         /// True when RenderSurface has been initialized and ready for rendering

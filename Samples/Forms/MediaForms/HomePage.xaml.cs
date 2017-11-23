@@ -176,6 +176,17 @@ namespace MediaForms
             }
         }
 
+        private async void PlayAudioListFromSecondWithDuplicate_OnClicked(object sender, EventArgs e)
+        {
+            var playlist = RetrievePlaylist(true);
+            await CrossMediaManager.Current.Play(playlist, 1);
+
+            foreach (var child in PlaylistActionContainer.Children)
+            {
+                child.IsEnabled = true;
+            }
+        }
+
         private void SetVolumeBtn_OnClicked(object sender, EventArgs e)
         {
             int.TryParse(this.volumeEntry.Text, out var vol);
@@ -225,9 +236,9 @@ namespace MediaForms
             CrossMediaManager.Current.MediaQueue.IsShuffled = !CrossMediaManager.Current.MediaQueue.IsShuffled;
         }
 
-        private static List<MediaFile> RetrievePlaylist()
+        private static List<MediaFile> RetrievePlaylist(bool allowDuplicates = false)
         {
-            var list = new List<MediaFile>
+            var playlist = new List<MediaFile>
             {
                 new MediaFile
                 {
@@ -235,7 +246,8 @@ namespace MediaForms
                     Type = MediaFileType.Audio,
                     Metadata = new MediaFileMetadata
                     {
-                        Title = "Test1"
+                        Title = "Test1",
+                        TrackNumber = 0
                     }
                 },
                 new MediaFile
@@ -245,7 +257,8 @@ namespace MediaForms
                     Metadata = new MediaFileMetadata
                     {
                         Title = "Test2",
-                        ArtUri = "https://d15mj6e6qmt1na.cloudfront.net/i/8457198.jpg"
+                        ArtUri = "https://d15mj6e6qmt1na.cloudfront.net/i/8457198.jpg",
+                        TrackNumber = 2
                     }
                 },
                 new MediaFile
@@ -255,11 +268,28 @@ namespace MediaForms
                     Metadata = new MediaFileMetadata
                     {
                         Title = "Test3",
-                        ArtUri = "https://d15mj6e6qmt1na.cloudfront.net/i/30739475.jpg"
+                        ArtUri = "https://d15mj6e6qmt1na.cloudfront.net/i/30739475.jpg",
+                        TrackNumber = 3
                     }
                 }
             };
-            return list;
+
+            if (allowDuplicates)
+            {
+                playlist.Insert(1, new MediaFile
+                {
+                    Url = "https://media.acast.com/mydadwroteaporno/s3e1-london-thursday15.55localtime/media.mp3",
+                    Type = MediaFileType.Audio,
+                    Metadata = new MediaFileMetadata
+                    {
+                        Title = "Test2",
+                        ArtUri = "https://d15mj6e6qmt1na.cloudfront.net/i/8457198.jpg",
+                        TrackNumber = 1
+                    }
+                });
+            }
+
+            return playlist;
         }
 
         private void PlaybackSlideValueChanged(object sender, ValueChangedEventArgs e)

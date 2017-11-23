@@ -15,6 +15,8 @@ namespace MediaForms
     [XamlCompilation(XamlCompilationOptions.Compile)]
     public partial class HomePage : ContentPage
     {
+        private bool isPlaybackProgressingNaturally;
+
         public HomePage()
         {
             InitializeComponent();
@@ -61,7 +63,9 @@ namespace MediaForms
 
             Device.BeginInvokeOnMainThread(() =>
             {
-                //PlaybackSlider.Value = e.Progress;
+                isPlaybackProgressingNaturally = true;
+                PlaybackSlider.Value = e.Progress;
+                isPlaybackProgressingNaturally = false;
             });
         }
 
@@ -264,6 +268,11 @@ namespace MediaForms
 
         private void PlaybackSlideValueChanged(object sender, ValueChangedEventArgs e)
         {
+            if (isPlaybackProgressingNaturally)
+            {
+                return;
+            }
+
             if (e == null || PlaybackSlider.Maximum == 0)
             {
                 return;

@@ -24,7 +24,7 @@ namespace Plugin.MediaManager
         private readonly IMediaPlyerPlaybackController _mediaPlyerPlaybackController;
         private readonly IDictionary<Guid, MediaPlaybackItem> _playbackItemByMediaFileIdDict = new Dictionary<Guid, MediaPlaybackItem>();
 
-        private readonly SemaphoreSlim _mediaQueueCollectionChangedSemaphor = new SemaphoreSlim(1);
+        private readonly SemaphoreSlim _playbackListChangesSemaphor = new SemaphoreSlim(1);
 
         private MediaPlayerStatus _status;
         private Timer _playProgressTimer;
@@ -114,11 +114,21 @@ namespace Plugin.MediaManager
                 var mediaToPlay = RetrievePlaylistItem(mediaFile);
                 if (mediaToPlay == null)
                 {
-                    PlaybackList.Items.Clear();
-                    var mediaPlaybackItem = await CreateMediaPlaybackItem(mediaFile);
-                    if (mediaPlaybackItem != null)
+                    try
                     {
-                        PlaybackList.Items.Add(mediaPlaybackItem);
+                        if (await _playbackListChangesSemaphor.WaitAsync(-1))
+                        {
+                            PlaybackList.Items.Clear();
+                            var mediaPlaybackItem = await CreateMediaPlaybackItem(mediaFile);
+                            if (mediaPlaybackItem != null)
+                            {
+                                PlaybackList.Items.Add(mediaPlaybackItem);
+                            }
+                        }
+                    }
+                    finally
+                    {
+                        _playbackListChangesSemaphor.Release(1);
                     }
                 }
                 else
@@ -328,11 +338,13 @@ namespace Plugin.MediaManager
             var mediaToPlayIndex = PlaybackList.Items.IndexOf(playlistItemToPlay);
             if (mediaToPlayIndex < 0)
             {
+                Debug.WriteLine($"Specified media file not present in the playback list. Media file title: {e.File.Metadata?.Title}");
                 return;
             }
 
             PlaybackList.MoveTo((uint)mediaToPlayIndex);
         }
+
 
         private async void MediaQueueCollectionChanged(object sender, NotifyCollectionChangedEventArgs e)
         {
@@ -345,7 +357,7 @@ namespace Plugin.MediaManager
 
             try
             {
-                if (await _mediaQueueCollectionChangedSemaphor.WaitAsync(-1))
+                if (await _playbackListChangesSemaphor.WaitAsync(-1))
                 {
                     switch (e.Action)
                     {
@@ -369,7 +381,7 @@ namespace Plugin.MediaManager
             }
             finally
             {
-                _mediaQueueCollectionChangedSemaphor.Release(1);
+                _playbackListChangesSemaphor.Release(1);
             }
         }
 
@@ -413,7 +425,10 @@ namespace Plugin.MediaManager
                     }
                     else
                     {
-                        PlaybackList.Items.Insert(e.NewStartingIndex, newPlaybackItem);
+                        if (e.NewStartingIndex <= PlaybackList.Items.Count)
+                        {
+                            PlaybackList.Items.Insert(e.NewStartingIndex, newPlaybackItem);
+                        }
                     }
                     _playbackItemByMediaFileIdDict.Add(newMediaFile.Id, newPlaybackItem);
                 }
@@ -451,6 +466,12 @@ namespace Plugin.MediaManager
                 {
                     // Replace playlist media file with new one
                     var mediaFileInPlaylistIndex = PlaybackList.Items.IndexOf(mediaFileInPlaylist);
+                    if (mediaFileInPlaylistIndex < 0)
+                    {
+                        Debug.WriteLine($"Specified media file not present in the playback list. Media file title: {oldMediaFile.Metadata?.Title}");
+                        return;
+                    }
+
                     if (mediaFileInPlaylistIndex == PlaybackList.CurrentItemIndex)
                     {
                         Player.Pause();
@@ -489,6 +510,12 @@ namespace Plugin.MediaManager
                     }
 
                     var mediaFileInPlaylistIndex = PlaybackList.Items.IndexOf(mediaFileInPlaylist);
+                    if (mediaFileInPlaylistIndex < 0)
+                    {
+                        Debug.WriteLine($"Specified media file not present in the playback list. Media file title: {mediaFile.Metadata?.Title}");
+                        continue;
+                    }
+
                     var isMediaFileInPlaylistIndexCurrentlyPlaying = mediaFileInPlaylistIndex == PlaybackList.CurrentItemIndex;
                     if (isMediaFileInPlaylistIndexCurrentlyPlaying)
                     {

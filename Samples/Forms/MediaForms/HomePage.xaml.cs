@@ -56,7 +56,7 @@ namespace MediaForms
 
         private void PlaybackChanged(object sender, PlayingChangedEventArgs e)
         {
-            if (e == null)
+            if (e == null || double.IsNaN(e.Progress))
             {
                 return;
             }

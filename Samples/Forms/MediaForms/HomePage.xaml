@@ -21,6 +21,8 @@
                                 Clicked="PlaylistButton_OnClicked" />
                         <Button Text="Play Audio List (start from second in the list)"
                                 Clicked="PlayAudioListFromSecond_OnClicked" />
+                        <Button Text="Play Audio List (start from second in the list and duplicate exists)"
+                                Clicked="PlayAudioListFromSecondWithDuplicate_OnClicked" />
                     </StackLayout>
                     <StackLayout Orientation="Horizontal"
                                  x:Name="PlaylistActionContainer">

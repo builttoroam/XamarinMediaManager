@@ -60,11 +60,16 @@ namespace MediaForms
             {
                 return;
             }
-
+            Debug.WriteLine($"[Playback] Progress changed {e.Progress}");
             Device.BeginInvokeOnMainThread(() =>
             {
                 isPlaybackProgressingNaturally = true;
-                PlaybackSlider.Value = e.Progress;
+                var progress = e.Progress;
+                if (Device.RuntimePlatform == Device.Android)
+                {
+                    progress = progress / 100;
+                }
+                PlaybackSlider.Value = progress;
                 isPlaybackProgressingNaturally = false;
             });
         }

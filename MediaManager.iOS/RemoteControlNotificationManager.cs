@@ -14,6 +14,8 @@ namespace Plugin.MediaManager
     {
         private readonly IPlaybackController _playbackController;
 
+        private bool isStarted;
+
         private NSObject _playCommandUnsubscribeToken;
         private NSObject _pauseCommandUnsubscribeToken;
         private NSObject _skipForwardCommandUnsubscribeToken;
@@ -39,6 +41,13 @@ namespace Plugin.MediaManager
 
         public virtual void StartNotification(IMediaFile mediaFile)
         {
+            // We need this flag, as StartNotfication happens many times over the life of a media player
+            // TODO this should most likely be thread safe (actually, StartNotification should not happen multiple times, unless you call StopNotification before)
+            if (isStarted)
+            {
+                return;
+            }
+
             _playCommandUnsubscribeToken = MPRemoteCommandCenter.Shared.PlayCommand.AddTarget(OnPlayCommand);
             _pauseCommandUnsubscribeToken = MPRemoteCommandCenter.Shared.PauseCommand.AddTarget(OnPauseCommand);
             _skipForwardCommandUnsubscribeToken = MPRemoteCommandCenter.Shared.SkipForwardCommand.AddTarget(OnSkipForwardCommand);
@@ -46,10 +55,17 @@ namespace Plugin.MediaManager
             _changePlaybackPositionCommandUnsubscribeToken = MPRemoteCommandCenter.Shared.ChangePlaybackPositionCommand.AddTarget(OnChangePlaybackPositionCommand);
             _nextCommandUnsubscribeToken = MPRemoteCommandCenter.Shared.NextTrackCommand.AddTarget(OnNextCommand);
             _previousCommandUnsubscribeToken = MPRemoteCommandCenter.Shared.PreviousTrackCommand.AddTarget(OnPreviousCommand);
+
+            isStarted = true;
         }
 
         public virtual void StopNotifications()
         {
+            if (!isStarted)
+            {
+                return;
+            }
+
             MPRemoteCommandCenter.Shared.PlayCommand.RemoveTarget(_playCommandUnsubscribeToken);
             MPRemoteCommandCenter.Shared.PauseCommand.RemoveTarget(_pauseCommandUnsubscribeToken);
             MPRemoteCommandCenter.Shared.SkipForwardCommand.RemoveTarget(_skipForwardCommandUnsubscribeToken);
@@ -57,6 +73,8 @@ namespace Plugin.MediaManager
             MPRemoteCommandCenter.Shared.ChangePlaybackPositionCommand.RemoveTarget(_changePlaybackPositionCommandUnsubscribeToken);
             MPRemoteCommandCenter.Shared.NextTrackCommand.RemoveTarget(_nextCommandUnsubscribeToken);
             MPRemoteCommandCenter.Shared.PreviousTrackCommand.RemoveTarget(_previousCommandUnsubscribeToken);
+
+            isStarted = false;
         }
 
         public virtual void UpdateNotifications(IMediaFile mediaFile, MediaPlayerStatus status)

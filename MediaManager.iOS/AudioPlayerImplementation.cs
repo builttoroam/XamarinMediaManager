@@ -337,8 +337,7 @@ namespace Plugin.MediaManager
 
             switch (e.Action)
             {
-                case NotifyCollectionChangedAction.Add:
-                    // TODO figure out when we can actually manipulate the queue (without this delay Mono throws exceptions and crashes the app)
+                case NotifyCollectionChangedAction.Add:                    
                     HandleMediaQueueAddAction(e);
                     break;
                 case NotifyCollectionChangedAction.Move:

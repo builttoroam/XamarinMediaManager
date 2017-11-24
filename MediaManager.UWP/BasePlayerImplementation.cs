@@ -345,7 +345,6 @@ namespace Plugin.MediaManager
             PlaybackList.MoveTo((uint)mediaToPlayIndex);
         }
 
-
         private async void MediaQueueCollectionChanged(object sender, NotifyCollectionChangedEventArgs e)
         {
             if (e == null)

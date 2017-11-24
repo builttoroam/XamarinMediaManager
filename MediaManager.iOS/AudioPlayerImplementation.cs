@@ -337,7 +337,7 @@ namespace Plugin.MediaManager
 
             switch (e.Action)
             {
-                case NotifyCollectionChangedAction.Add:                    
+                case NotifyCollectionChangedAction.Add:
                     HandleMediaQueueAddAction(e);
                     break;
                 case NotifyCollectionChangedAction.Move:
@@ -729,6 +729,10 @@ namespace Plugin.MediaManager
 
             var hasNext = _playerItems.Count - 1 - indexOfCurrentPlayerItem > 0;
             var hasPrevious = indexOfCurrentPlayerItem > 0;
+
+            Debug.WriteLine($"[Playback] Updating remote controls");
+            Debug.WriteLine($"[Playback] Index of current item {indexOfCurrentPlayerItem}");
+            Debug.WriteLine($"[Playback] Has Next? {hasNext} : Has Previous? {hasPrevious}");
 
             MPRemoteCommandCenter.Shared.NextTrackCommand.Enabled = hasNext;
             MPRemoteCommandCenter.Shared.PreviousTrackCommand.Enabled = hasPrevious;

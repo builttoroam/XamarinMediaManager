@@ -6,7 +6,10 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
+using MediaForms.Interface;
 using Xamarin.Forms;
 using Xamarin.Forms.Xaml;
 
@@ -196,6 +199,17 @@ namespace MediaForms
             }
         }
 
+        private async void PlayAudioListWithLocal_OnClicked(object sender, EventArgs e)
+        {
+            var playlist = RetrieveLocalPlaylist();
+            await CrossMediaManager.Current.Play(playlist, 1);
+
+            foreach (var child in PlaylistActionContainer.Children)
+            {
+                child.IsEnabled = true;
+            }
+        }
+
         private void SetVolumeBtn_OnClicked(object sender, EventArgs e)
         {
             int.TryParse(this.volumeEntry.Text, out var vol);
@@ -297,6 +311,55 @@ namespace MediaForms
                     }
                 });
             }
+
+            return playlist;
+        }
+
+        private List<MediaFile> RetrieveLocalPlaylist()
+        {
+            var fileService = DependencyService.Get<IFileService>();
+            var localFolderPath = fileService.GetLocalFilePath();
+            var sameFilePath1 = Path.Combine(localFolderPath, "Memes-Memes-Everywhere.mp3");
+            var sameFilePath2 = Path.Combine(localFolderPath, "The-Harlem-Shake-made.mp3");
+            var sameFilePath3 = Path.Combine(localFolderPath, "Why-you-need-an-internet.mp3");
+            var playlist = new List<MediaFile>
+            {
+                new MediaFile
+                {
+                    Availability = ResourceAvailability.Local,
+                    Url = sameFilePath1,
+                    Type = MediaFileType.Audio,
+                    Metadata = new MediaFileMetadata
+                    {
+                        Title = "Local Test1",
+                        TrackNumber = 0
+                    }
+                },
+                new MediaFile
+                {
+                    Availability = ResourceAvailability.Local,
+                    Url = sameFilePath2,
+                    Type = MediaFileType.Audio,
+                    Metadata = new MediaFileMetadata
+                    {
+                        Title = "Local Test2",
+                        ArtUri = "https://d15mj6e6qmt1na.cloudfront.net/i/8457198.jpg",
+                        TrackNumber = 2
+                    }
+                },
+                new MediaFile
+                {
+                    Availability = ResourceAvailability.Local,
+                    Url = sameFilePath3,
+                    Type = MediaFileType.Audio,
+                    Metadata = new MediaFileMetadata
+                    {
+                        Title = "Local Test3",
+                        ArtUri = "https://d15mj6e6qmt1na.cloudfront.net/i/30739475.jpg",
+                        TrackNumber = 3
+                    }
+                }
+            };
 
             return playlist;
         }

@@ -41,6 +41,7 @@
     <Compile Include="HomePage.xaml.cs">
       <DependentUpon>HomePage.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Interface\IFileService.cs" />
     <Compile Include="MediaFormsPage.xaml.cs">
       <DependentUpon>MediaFormsPage.xaml</DependentUpon>
     </Compile>

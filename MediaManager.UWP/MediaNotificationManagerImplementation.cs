@@ -1,10 +1,10 @@
+using Plugin.MediaManager.Abstractions;
+using Plugin.MediaManager.Abstractions.Enums;
+using Plugin.MediaManager.Interfaces;
 using System;
 using Windows.Media;
 using Windows.Media.Playback;
 using Windows.Storage;
-using Plugin.MediaManager.Abstractions;
-using Plugin.MediaManager.Abstractions.Enums;
-using Plugin.MediaManager.Interfaces;
 
 namespace Plugin.MediaManager
 {
@@ -47,6 +47,10 @@ namespace Plugin.MediaManager
             UpdateInfoFromMediaFile(mediaFile);
         }
 
+        public void UpdateNativeStepInterval()
+        {
+        }
+
         private async void UpdateInfoFromMediaFile(IMediaFile mediaFile)
         {
             if (mediaFile == null || _mediaPlyerPlaybackController?.Player == null)
@@ -63,6 +67,7 @@ namespace Plugin.MediaManager
                         await updater.CopyFromFileAsync(MediaPlaybackType.Music,
                             await StorageFile.GetFileFromPathAsync(mediaFile.Url));
                         break;
+
                     case MediaFileType.Video:
                         await updater.CopyFromFileAsync(MediaPlaybackType.Video,
                                 await StorageFile.GetFileFromPathAsync(mediaFile.Url));

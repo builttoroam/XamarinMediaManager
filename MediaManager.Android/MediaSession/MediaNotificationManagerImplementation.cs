@@ -4,30 +4,69 @@ using Android.Content;
 using Android.Graphics;
 using Android.Support.V4.App;
 using Android.Support.V4.Media.Session;
+using Java.Net;
 using Plugin.MediaManager.Abstractions;
 using Plugin.MediaManager.Abstractions.Enums;
+using Plugin.MediaManager.Abstractions.EventArguments;
 using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Diagnostics;
-using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
-using Java.Net;
-using Plugin.MediaManager.Abstractions.EventArguments;
 using NotificationCompat = Android.Support.V7.App.NotificationCompat;
 
 namespace Plugin.MediaManager
 {
     internal class MediaNotificationManagerImplementation : IAndroidMediaNotificationManager
     {
-        public IMediaQueue MediaQueue { get; set; }
-        public MediaSessionCompat.Token SessionToken { get; set; }
-
         private const int NotificationId = 1;
+
         private const int MaxNumberOfActionButtons = 5;
 
+        private readonly Context _applicationContext;
+
+        private readonly Intent _intent;
+
+        private readonly PendingIntent _pendingIntent;
+
+        private readonly NotificationManagerCompat _notificationManagerCompat;
+
+        private readonly NotificationCompat.MediaStyle _notificationStyle = new NotificationCompat.MediaStyle();
+
         private NotificationCompat.Builder _builder;
+
+        private Android.Support.V4.App.NotificationCompat.Action _previousButton;
+
+        private Android.Support.V4.App.NotificationCompat.Action _stepBackwardButton;
+
+        private Android.Support.V4.App.NotificationCompat.Action _playButton;
+
+        private Android.Support.V4.App.NotificationCompat.Action _pauseButton;
+
+        private Android.Support.V4.App.NotificationCompat.Action _stepForwardButton;
+
+        private Android.Support.V4.App.NotificationCompat.Action _nextButton;
+
+        private bool _notificationStarted;
+
+        public MediaNotificationManagerImplementation(Context applicationContext, IMediaQueue mediaQueue, Type serviceType)
+        {
+            _applicationContext = applicationContext;
+            MediaQueue = mediaQueue;
+            MediaQueue.QueueMediaChanged += MediaQueueItemChanged;
+            MediaQueue.CollectionChanged += MediaQueueCollectionChanged;
+            _intent = new Intent(_applicationContext, serviceType);
+
+            var mainActivity = _applicationContext.PackageManager.GetLaunchIntentForPackage(_applicationContext.PackageName);
+            _pendingIntent = PendingIntent.GetActivity(_applicationContext, 0, mainActivity, PendingIntentFlags.UpdateCurrent);
+
+            _notificationManagerCompat = NotificationManagerCompat.From(_applicationContext);
+        }
+
+        public IMediaQueue MediaQueue { get; set; }
+
+        public MediaSessionCompat.Token SessionToken { get; set; }
+
         private NotificationCompat.Builder Builder
         {
             get
@@ -47,48 +86,21 @@ namespace Plugin.MediaManager
             }
         }
 
-        private Android.Support.V4.App.NotificationCompat.Action _previousButton;
         private Android.Support.V4.App.NotificationCompat.Action PreviousButton => _previousButton ?? (_previousButton = GenerateActionCompat(Resource.Drawable.IcMediaPrevious, nameof(MediaServiceBase.ActionPrevious), MediaServiceBase.ActionPrevious));
 
-        private Android.Support.V4.App.NotificationCompat.Action _stepBackwardButton;
         private Android.Support.V4.App.NotificationCompat.Action StepBackwardButton => _stepBackwardButton ?? (_stepBackwardButton = GenerateActionCompat(Resource.Drawable.IcMediaRew, nameof(MediaServiceBase.ActionStepBackward), MediaServiceBase.ActionStepBackward));
 
-        private Android.Support.V4.App.NotificationCompat.Action _playButton;
         private Android.Support.V4.App.NotificationCompat.Action PlayButton => _playButton ?? (_playButton = GenerateActionCompat(Resource.Drawable.IcMediaPlay, nameof(MediaServiceBase.ActionPlay), MediaServiceBase.ActionPlay));
 
-        private Android.Support.V4.App.NotificationCompat.Action _pauseButton;
         private Android.Support.V4.App.NotificationCompat.Action PauseButton => _pauseButton ?? (_pauseButton = GenerateActionCompat(Resource.Drawable.IcMediaPause, nameof(MediaServiceBase.ActionPause), MediaServiceBase.ActionPause));
 
-        private Android.Support.V4.App.NotificationCompat.Action _stepForwardButton;
         private Android.Support.V4.App.NotificationCompat.Action StepForwardButton => _stepForwardButton ?? (_stepForwardButton = GenerateActionCompat(Resource.Drawable.IcMediaFf, nameof(MediaServiceBase.ActionStepBackward), MediaServiceBase.ActionStepForward));
 
-        private Android.Support.V4.App.NotificationCompat.Action _nextButton;
         private Android.Support.V4.App.NotificationCompat.Action NextButton => _nextButton ?? (_nextButton = GenerateActionCompat(Resource.Drawable.IcMediaNext, nameof(MediaServiceBase.ActionNext), MediaServiceBase.ActionNext));
 
         private bool IsPreviousActionButtonVisible => MediaQueue?.HasPrevious() ?? false;
+
         private bool IsNextActionButtonVisible => MediaQueue?.HasNext() ?? false;
-
-        private readonly Context _applicationContext;
-        private readonly Intent _intent;
-        private readonly PendingIntent _pendingIntent;
-        private readonly NotificationManagerCompat _notificationManagerCompat;
-        private readonly NotificationCompat.MediaStyle _notificationStyle = new NotificationCompat.MediaStyle();
-
-        private bool _notificationStarted;
-
-        public MediaNotificationManagerImplementation(Context applicationContext, IMediaQueue mediaQueue, Type serviceType)
-        {
-            _applicationContext = applicationContext;
-            MediaQueue = mediaQueue;
-            MediaQueue.QueueMediaChanged += MediaQueueItemChanged;
-            MediaQueue.CollectionChanged += MediaQueueCollectionChanged;
-            _intent = new Intent(_applicationContext, serviceType);
-
-            var mainActivity = _applicationContext.PackageManager.GetLaunchIntentForPackage(_applicationContext.PackageName);
-            _pendingIntent = PendingIntent.GetActivity(_applicationContext, 0, mainActivity, PendingIntentFlags.UpdateCurrent);
-
-            _notificationManagerCompat = NotificationManagerCompat.From(_applicationContext);
-        }
 
         /// <summary>
         /// Starts the notification.
@@ -151,6 +163,10 @@ namespace Plugin.MediaManager
                 Console.WriteLine(ex.Message);
                 StopNotifications();
             }
+        }
+
+        public void UpdateNativeStepInterval()
+        {
         }
 
         private void MediaQueueItemChanged(object sender, QueueMediaChangedEventArgs e)
@@ -290,6 +306,7 @@ namespace Plugin.MediaManager
                     Builder.MActions.Insert(buttonPositionStartingFromLeft, actionbutton);
                 }
             }
+
             // Hide
             if (isAlreadyVisible && !isVisible)
             {

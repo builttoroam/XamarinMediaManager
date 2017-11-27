@@ -1,9 +1,9 @@
+using Plugin.MediaManager.Abstractions.Enums;
+using Plugin.MediaManager.Abstractions.EventArguments;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Plugin.MediaManager.Abstractions.Enums;
-using Plugin.MediaManager.Abstractions.EventArguments;
 
 namespace Plugin.MediaManager.Abstractions.Implementations
 {
@@ -16,20 +16,26 @@ namespace Plugin.MediaManager.Abstractions.Implementations
 
         private Func<IMediaFile, Task> _onBeforePlay;
 
-        private IPlaybackManager CurrentPlaybackManager
+        private bool _startedPlaying;
+
+        protected MediaManagerBase()
         {
-            get
-            {
-                if (_currentPlaybackManager == null && CurrentMediaFile != null) SetCurrentPlayer(CurrentMediaFile.Type);
-
-                if (_currentPlaybackManager != null)
-                {
-                    _currentPlaybackManager.RequestHeaders = RequestHeaders;
-                }
-
-                return _currentPlaybackManager;
-            }
+            PlaybackController = new PlaybackController(this);
         }
+
+        public event StatusChangedEventHandler StatusChanged;
+
+        public event PlayingChangedEventHandler PlayingChanged;
+
+        public event BufferingChangedEventHandler BufferingChanged;
+
+        public event MediaFinishedEventHandler MediaFinished;
+
+        public event MediaFailedEventHandler MediaFailed;
+
+        public event MediaFileChangedEventHandler MediaFileChanged;
+
+        public event MediaFileFailedEventHandler MediaFileFailed;
 
         public virtual IMediaQueue MediaQueue { get; set; } = new MediaQueue();
 
@@ -53,29 +59,27 @@ namespace Plugin.MediaManager.Abstractions.Implementations
 
         public TimeSpan Buffered => CurrentPlaybackManager?.Buffered ?? TimeSpan.Zero;
 
-        public event StatusChangedEventHandler StatusChanged;
+        public Dictionary<string, string> RequestHeaders { get; set; } = new Dictionary<string, string>();
 
-        public event PlayingChangedEventHandler PlayingChanged;
+        private IPlaybackManager CurrentPlaybackManager
+        {
+            get
+            {
+                if (_currentPlaybackManager == null && CurrentMediaFile != null) SetCurrentPlayer(CurrentMediaFile.Type);
 
-        public event BufferingChangedEventHandler BufferingChanged;
+                if (_currentPlaybackManager != null)
+                {
+                    _currentPlaybackManager.RequestHeaders = RequestHeaders;
+                }
 
-        public event MediaFinishedEventHandler MediaFinished;
-
-        public event MediaFailedEventHandler MediaFailed;
-
-        public event MediaFileChangedEventHandler MediaFileChanged;
-
-        public event MediaFileFailedEventHandler MediaFileFailed;
+                return _currentPlaybackManager;
+            }
+        }
 
         private IMediaFile CurrentMediaFile => MediaQueue.Current;
 
-        public Dictionary<string, string> RequestHeaders { get; set; } = new Dictionary<string, string>();
-
-        private bool _startedPlaying;
-
-        protected MediaManagerBase()
+        public virtual void UpdateStepSecondsForRemoteControls()
         {
-            PlaybackController = new PlaybackController(this);
         }
 
         public async Task PlayNext()
@@ -284,9 +288,11 @@ namespace Plugin.MediaManager.Abstractions.Implementations
                 case MediaFileType.Audio:
                     _currentPlaybackManager = AudioPlayer;
                     break;
+
                 case MediaFileType.Video:
                     _currentPlaybackManager = VideoPlayer;
                     break;
+
                 default:
                     throw new ArgumentOutOfRangeException();
             }
@@ -373,7 +379,6 @@ namespace Plugin.MediaManager.Abstractions.Implementations
             if (CurrentMediaFile?.Url == e?.File?.Url)
                 MediaNotificationManager?.UpdateNotifications(e?.File, Status);
             MediaFileChanged?.Invoke(sender, e);
-
         }
 
         private void OnMediaFileFailed(object sender, MediaFileFailedEventArgs e)
@@ -415,15 +420,22 @@ namespace Plugin.MediaManager.Abstractions.Implementations
                 case MediaFileType.Audio:
                     var audioPlayer = AudioPlayer;
                     break;
+
                 case MediaFileType.Video:
                     var videoPlayer = VideoPlayer;
                     break;
             }
         }
 
-        #region IDisposable        
+        #region IDisposable
+
         // Flag: Has Dispose already been called?
-        bool disposed = false;
+        private bool disposed = false;
+
+        ~MediaManagerBase()
+        {
+            Dispose(false);
+        }
 
         // Public implementation of Dispose pattern callable by consumers.
         public void Dispose()
@@ -449,10 +461,6 @@ namespace Plugin.MediaManager.Abstractions.Implementations
             disposed = true;
         }
 
-        ~MediaManagerBase()
-        {
-            Dispose(false);
-        }
-        #endregion
+        #endregion IDisposable
     }
 }

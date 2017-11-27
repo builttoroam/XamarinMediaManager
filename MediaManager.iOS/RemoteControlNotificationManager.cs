@@ -1,17 +1,14 @@
-using System;
-using System.Diagnostics;
-using System.Threading;
-using System.Threading.Tasks;
 using Foundation;
 using MediaPlayer;
 using Plugin.MediaManager.Abstractions;
 using Plugin.MediaManager.Abstractions.Enums;
-using UIKit;
+using System.Threading.Tasks;
 
 namespace Plugin.MediaManager
 {
     public class RemoteControlNotificationManager : NSObject, IMediaNotificationManager
     {
+        protected bool IsRemoteControlTriggeredSeeking;
         private readonly IPlaybackController _playbackController;
 
         private bool isStarted;
@@ -23,8 +20,6 @@ namespace Plugin.MediaManager
         private NSObject _changePlaybackPositionCommandUnsubscribeToken;
         private NSObject _nextCommandUnsubscribeToken;
         private NSObject _previousCommandUnsubscribeToken;
-
-        protected bool IsRemoteControlTriggeredSeeking;
 
         public RemoteControlNotificationManager(IPlaybackController playbackController)
         {
@@ -79,6 +74,12 @@ namespace Plugin.MediaManager
 
         public virtual void UpdateNotifications(IMediaFile mediaFile, MediaPlayerStatus status)
         {
+        }
+
+        public virtual void UpdateNativeStepInterval()
+        {
+            MPRemoteCommandCenter.Shared.SkipForwardCommand.PreferredIntervals = new[] { _playbackController.StepSeconds };
+            MPRemoteCommandCenter.Shared.SkipBackwardCommand.PreferredIntervals = new[] { _playbackController.StepSeconds };
         }
 
         private MPRemoteCommandHandlerStatus OnPlayCommand(MPRemoteCommandEvent e)

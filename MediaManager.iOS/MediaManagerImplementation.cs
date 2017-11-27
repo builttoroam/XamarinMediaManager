@@ -10,5 +10,10 @@ namespace Plugin.MediaManager
         }
 
         public sealed override IMediaNotificationManager MediaNotificationManager { get; set; }
+
+        public sealed override void UpdateStepSecondsForRemoteControls()
+        {
+            MediaNotificationManager.UpdateNativeStepInterval();
+        }
     }
 }

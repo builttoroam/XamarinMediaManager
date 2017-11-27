@@ -31,8 +31,6 @@ namespace Plugin.MediaManager
         public const string ActionStepForward = "com.xamarin.action.STEPFORWARD";
         public const string ActionStepBackward = "com.xamarin.action.STEPBACKWARD";
 
-        //internal const int NotificationId = 1;
-
         private WifiManager wifiManager;
         private WifiManager.WifiLock wifiLock;
         private IntentFilter _intentFilter;
@@ -50,7 +48,7 @@ namespace Plugin.MediaManager
 
         public bool TransientPaused { get; set; } = false;
 
-        public AudioManager AudioManager { get; set; }
+        public AudioManager AudioManager { get; private set; }
 
         public IMediaFile CurrentFile { get; set; }
 
@@ -84,6 +82,7 @@ namespace Plugin.MediaManager
         public override void OnCreate()
         {
             base.OnCreate();
+
             //Find our audio and notificaton managers
             AudioManager = (AudioManager)GetSystemService(AudioService);
             wifiManager = (WifiManager)GetSystemService(WifiService);
@@ -360,7 +359,6 @@ namespace Plugin.MediaManager
                 ManuallyPaused = false;
                 SessionManager.UpdatePlaybackState(PlaybackStateCompat.StatePlaying, Position.Seconds);
                 SessionManager.UpdateMetadata(mediaFile);
-                SessionManager.NotificationManager.StartNotification(mediaFile);
                 CurrentFile = mediaFile;
                 Resume();
                 return await Task.FromResult(true);

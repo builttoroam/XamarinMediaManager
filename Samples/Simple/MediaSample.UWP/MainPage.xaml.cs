@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.Linq;
 using Windows.ApplicationModel.Core;
@@ -102,7 +102,7 @@ namespace MediaSample.UWP
         {
             if (mediaFile == null)
             {
-                mediaFile = new MediaFile("http://www.montemagno.com/sample.mp3", MediaFileType.Audio);
+                mediaFile = new MediaFile("https://audioboom.com/posts/5766044-follow-up-305.mp3", MediaFileType.Audio);
             }
             await CrossMediaManager.Current.Play(mediaFile);
             //var file = await KnownFolders.VideosLibrary.GetFileAsync("big_buck_bunny.mp4");

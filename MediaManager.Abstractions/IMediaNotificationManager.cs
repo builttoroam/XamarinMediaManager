@@ -1,4 +1,4 @@
-﻿using Plugin.MediaManager.Abstractions.Enums;
+using Plugin.MediaManager.Abstractions.Enums;
 
 namespace Plugin.MediaManager.Abstractions
 {
@@ -24,5 +24,10 @@ namespace Plugin.MediaManager.Abstractions
         /// <param name="mediaFile">The media file.</param>
         /// <param name="status">The status.</param>
         void UpdateNotifications(IMediaFile mediaFile, MediaPlayerStatus status);
+
+        /// <summary>
+        /// Forces the iOS native step controls to update their step interval from the value that is set in IPlaybackController
+        /// </summary>
+        void UpdateNativeStepInterval();
     }
 }

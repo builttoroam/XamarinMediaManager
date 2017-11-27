@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -13,7 +13,7 @@ namespace Plugin.MediaManager.Abstractions.Implementations
 {
     public class MediaQueue : IMediaQueue
     {
-        public MediaQueue ()
+        public MediaQueue()
         {
             _queue = new ObservableCollection<IMediaFile>();
 
@@ -203,11 +203,6 @@ namespace Plugin.MediaManager.Abstractions.Implementations
             if (IsShuffled)
             {
                 _unshuffledQueue.AddRange(mediaFiles);
-            }
-
-            if (Index == -1)
-            {
-                Index = 0;
             }
         }
 
@@ -404,12 +399,12 @@ namespace Plugin.MediaManager.Abstractions.Implementations
         }
 
         private void RegisterCurrentTriggers()
-        {
+        {            
             var updateProperty = new Action(() =>
                 {
                     if (_queue?.LastOrDefault() == Current)
                         QueueEnded?.Invoke(this, new QueueEndedEventArgs());
-                
+
                     IMediaFile current = null;
                     if (Count - 1 >= Index && Index >= 0)
                     {

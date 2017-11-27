@@ -1,8 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 using Plugin.MediaManager.Abstractions.Enums;
 using Plugin.MediaManager.Abstractions.EventArguments;
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace Plugin.MediaManager.Abstractions
 {
@@ -17,6 +17,16 @@ namespace Plugin.MediaManager.Abstractions
     /// <seealso cref="Plugin.MediaManager.Abstractions.IPlaybackManager" />
     public interface IMediaManager : IPlaybackManager
     {
+        /// <summary>
+        /// Raised when the media information of the track has changed.
+        /// </summary>
+        event MediaFileChangedEventHandler MediaFileChanged;
+
+        /// <summary>
+        /// Raised when mediadata of MediaFile failed to update
+        /// </summary>
+        event MediaFileFailedEventHandler MediaFileFailed;
+
         /// <summary>
         /// Player responsible for audio playback
         /// </summary>
@@ -53,16 +63,6 @@ namespace Plugin.MediaManager.Abstractions
         IPlaybackController PlaybackController { get; set; }
 
         /// <summary>
-        /// Raised when the media information of the track has changed.
-        /// </summary>
-        event MediaFileChangedEventHandler MediaFileChanged;
-
-        /// <summary>
-        /// Raised when mediadata of MediaFile failed to update
-        /// </summary>
-        event MediaFileFailedEventHandler MediaFileFailed;
-
-        /// <summary>
         /// Creates new MediaFile object, adds it to the queue and starts playing
         /// </summary>
         Task Play(string url);
@@ -83,6 +83,11 @@ namespace Plugin.MediaManager.Abstractions
         Task Play(IEnumerable<IMediaFile> mediaFiles);
 
         /// <summary>
+        /// Adds all MediaFiles to the Queue and starts playing specified one
+        /// </summary>
+        Task Play(IEnumerable<IMediaFile> mediaFiles, int startFromIndex);
+
+        /// <summary>
         /// Plays the next MediaFile in the Queue
         /// </summary>
         Task PlayNext();
@@ -91,7 +96,7 @@ namespace Plugin.MediaManager.Abstractions
         /// Plays the previous MediaFile in the Queue
         /// </summary>
         Task PlayPrevious();
-        
+
         /// <summary>
         /// Plays a MediaFile by its position in the Queue
         /// </summary>
@@ -103,5 +108,9 @@ namespace Plugin.MediaManager.Abstractions
         /// <param name="beforePlay">The before play.</param>
         void SetOnBeforePlay(Func<IMediaFile, Task> beforePlay);
 
+        /// <summary>
+        /// Notifies the MediaNotificationManager that the step seconds interval has been updated
+        /// </summary>
+        void UpdateStepSecondsForRemoteControls();
     }
 }

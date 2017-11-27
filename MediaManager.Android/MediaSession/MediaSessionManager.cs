@@ -83,7 +83,7 @@ namespace Plugin.MediaManager.MediaSession
                     UpdateAndroidNotificationManagerSettings();
 
                     mediaControllerCompat = new MediaControllerCompat(applicationContext, mediaSessionCompat.SessionToken);
-                    _notificationManager = _overrideNotificationManager ?? new MediaNotificationManagerImplementation(applicationContext, typeof(MediaPlayerService));
+                    _notificationManager = _overrideNotificationManager ?? new MediaNotificationManagerImplementation(applicationContext, mediaQueue, typeof(MediaPlayerService));
                 }
                 mediaSessionCompat.Active = true;
                 MediaServiceBase mediaServiceBase = binder.GetMediaPlayerService<MediaServiceBase>();

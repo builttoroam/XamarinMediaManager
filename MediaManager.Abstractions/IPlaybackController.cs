@@ -1,9 +1,14 @@
-﻿using System.Threading.Tasks;
+using System.Threading.Tasks;
 
 namespace Plugin.MediaManager.Abstractions
 {
     public interface IPlaybackController
     {
+        /// <summary>
+        /// Amount of seconds to step when skipped forward or backward
+        /// </summary>
+        double StepSeconds { get; }
+
         /// <summary>
         /// Plays or pauses the currentl MediaFile
         /// </summary>
@@ -70,5 +75,11 @@ namespace Plugin.MediaManager.Abstractions
         /// Enables or disables shuffling
         /// </summary>
         void ToggleShuffle();
+
+        /// <summary>
+        /// Overrides the StepSeconds value from the default 10 seconds
+        /// </summary>
+        /// <param name="newValue">The new step value in seconds</param>
+        void SetStepSeconds(double newValue);
     }
 }

@@ -29,7 +29,10 @@ namespace Plugin.MediaManager
 
                 float vol = value;
                 if (value > 0) float.TryParse((value / 100.0).ToString(), out vol);
-                player.Volume = vol;
+                if (player != null)
+                {
+                    player.Volume = vol;
+                }
 
                 VolumeChanged?.Invoke(this, new VolumeChangedEventArgs(value, Muted));
             }
@@ -53,9 +56,12 @@ namespace Plugin.MediaManager
             get => player?.Muted ?? false;
             set
             {
-                player.Muted = value;
-                int.TryParse((player.Volume * 100).ToString(), out var vol);
-                VolumeChanged?.Invoke(this, new VolumeChangedEventArgs(vol, value));
+                if (player != null)
+                {
+                    player.Muted = value;
+                    int.TryParse((player.Volume * 100).ToString(), out var vol);
+                    VolumeChanged?.Invoke(this, new VolumeChangedEventArgs(vol, value));
+                }
             }
         }
     }

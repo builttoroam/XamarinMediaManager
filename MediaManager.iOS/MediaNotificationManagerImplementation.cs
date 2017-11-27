@@ -1,4 +1,7 @@
-﻿using MediaPlayer;
+using System;
+using System.Diagnostics;
+using Foundation;
+using MediaPlayer;
 using Plugin.MediaManager.Abstractions;
 using Plugin.MediaManager.Abstractions.Enums;
 using UIKit;
@@ -9,16 +12,17 @@ namespace Plugin.MediaManager
     {
         private readonly IMediaManager _mediaManager;
 
+        public MediaNotificationManagerImplementation(IMediaManager mediaManager)
+            : base(mediaManager.PlaybackController)
+        {
+            _mediaManager = mediaManager;
+        }
+
         private IMediaQueue Queue => _mediaManager.MediaQueue;
 
         private MPNowPlayingInfo NowPlaying
         {
-            set { MPNowPlayingInfoCenter.DefaultCenter.NowPlaying = value; }
-        }
-
-        public MediaNotificationManagerImplementation(IMediaManager mediaManager)
-        {
-            _mediaManager = mediaManager;
+            set => MPNowPlayingInfoCenter.DefaultCenter.NowPlaying = value;
         }
 
         public override void StartNotification(IMediaFile mediaFile)
@@ -30,6 +34,11 @@ namespace Plugin.MediaManager
 
         public override void UpdateNotifications(IMediaFile mediaFile, MediaPlayerStatus status)
         {
+            if (IsRemoteControlTriggeredSeeking)
+            {
+                return;
+            }
+
             TrySetNowPlayingInfo(mediaFile);
 
             base.UpdateNotifications(mediaFile, status);
@@ -47,7 +56,6 @@ namespace Plugin.MediaManager
             if (mediaFile == null) return;
 
             var nowPlaying = CreateNowPlayingInfo(mediaFile);
-
             if (nowPlaying != null)
             {
                 NowPlaying = nowPlaying;
@@ -56,10 +64,14 @@ namespace Plugin.MediaManager
 
         private MPNowPlayingInfo CreateNowPlayingInfo(IMediaFile mediaFile)
         {
+            if (mediaFile?.Metadata == null)
+            {
+                return null;
+            }
+
+            Debug.WriteLine($"Updating playback metadata {_mediaManager.Position.Minutes} {_mediaManager.Position.Seconds}");
+
             var metadata = mediaFile.Metadata;
-
-            if (metadata == null) return null;
-
             var nowPlayingInfo = new MPNowPlayingInfo
             {
                 Title = metadata.Title,
@@ -73,17 +85,9 @@ namespace Plugin.MediaManager
                 ElapsedPlaybackTime = _mediaManager.Position.TotalSeconds,
                 PlaybackDuration = _mediaManager.Duration.TotalSeconds,
                 PlaybackQueueIndex = Queue.Index,
-                PlaybackQueueCount = Queue.Count
+                PlaybackQueueCount = Queue.Count,
+                PlaybackRate = _mediaManager.Status == MediaPlayerStatus.Playing ? 1f : 0f
             };
-
-            if (_mediaManager.Status == MediaPlayerStatus.Playing)
-            {
-                nowPlayingInfo.PlaybackRate = 1f;
-            }
-            else
-            {
-                nowPlayingInfo.PlaybackRate = 0f;
-            }
 
             var cover = metadata.AlbumArt as UIImage;
             if (cover != null)

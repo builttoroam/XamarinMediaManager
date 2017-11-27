@@ -7,7 +7,7 @@ namespace Plugin.MediaManager.Abstractions
         /// <summary>
         /// Amount of seconds to step when skipped forward or backward
         /// </summary>
-        double StepSeconds { get; }
+        double StepSeconds { get; set; }
 
         /// <summary>
         /// Plays or pauses the currentl MediaFile

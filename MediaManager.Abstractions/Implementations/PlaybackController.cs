@@ -1,25 +1,25 @@
-using Plugin.MediaManager.Abstractions.Enums;
 using System;
 using System.Threading.Tasks;
+using Plugin.MediaManager.Abstractions.Enums;
 
 namespace Plugin.MediaManager.Abstractions.Implementations
 {
-    public class PlaybackController : IPlaybackController
+    public class PlaybackController: IPlaybackController
     {
         private readonly IMediaManager _mediaManager;
 
-        public PlaybackController(IMediaManager mediaManager)
-        {
-            _mediaManager = mediaManager;
-        }
-
-        public virtual double StepSeconds { get; set; } = 10;
+        public virtual double StepSeconds => 10;
 
         public virtual double SeekToStartTreshold => 3;
 
         private IMediaQueue Queue => _mediaManager.MediaQueue;
 
         private double PositionSeconds => _mediaManager.Position.TotalSeconds;
+
+        public PlaybackController(IMediaManager mediaManager)
+        {
+            _mediaManager = mediaManager;
+        }
 
         public virtual async Task PlayPause()
         {
@@ -106,8 +106,7 @@ namespace Plugin.MediaManager.Abstractions.Implementations
             if (_mediaManager.Duration.TotalSeconds < seconds)
             {
                 seconds = _mediaManager.Duration.TotalSeconds;
-            }
-            else if (seconds < 0)
+            } else if (seconds < 0)
             {
                 seconds = 0;
             }
@@ -124,11 +123,9 @@ namespace Plugin.MediaManager.Abstractions.Implementations
                 case RepeatType.None:
                     Queue.Repeat = RepeatType.RepeatAll;
                     break;
-
                 case RepeatType.RepeatAll:
                     Queue.Repeat = RepeatType.RepeatOne;
                     break;
-
                 case RepeatType.RepeatOne:
                     Queue.Repeat = RepeatType.None;
                     break;

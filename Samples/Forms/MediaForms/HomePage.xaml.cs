@@ -21,15 +21,11 @@ namespace MediaForms
         {
             InitializeComponent();
             this.volumeLabel.Text = "Volume (0-" + CrossMediaManager.Current.VolumeManager.MaxVolume + ")";
-            //Initialize Volume settings to match interface
-            int.TryParse(this.volumeEntry.Text, out var vol);
-            CrossMediaManager.Current.VolumeManager.CurrentVolume = vol;
-            CrossMediaManager.Current.VolumeManager.Muted = false;
-        }
 
-        private void MainBtn_OnClicked(object sender, EventArgs e)
-        {
-            Navigation.PushAsync(new MediaFormsPage());
+            //Initialize Volume settings to match interface
+            var currentVol = CrossMediaManager.Current.VolumeManager.CurrentVolume;
+            this.volumeEntry.Text = currentVol.ToString();
+            CrossMediaManager.Current.VolumeManager.Muted = false;
         }
 
         protected override void OnAppearing()
@@ -41,6 +37,8 @@ namespace MediaForms
 
             CrossMediaManager.Current.MediaFinished += MediaFinished;
             CrossMediaManager.Current.MediaQueue.CollectionChanged += MediaQueueCollectionChanged;
+
+            CurrentOnStatusChanged(this, new StatusChangedEventArgs(CrossMediaManager.Current.Status));
         }
 
         protected override void OnDisappearing()
@@ -52,6 +50,67 @@ namespace MediaForms
 
             CrossMediaManager.Current.MediaFinished -= MediaFinished;
             CrossMediaManager.Current.MediaQueue.CollectionChanged -= MediaQueueCollectionChanged;
+        }
+
+        private static List<MediaFile> RetrievePlaylist(bool allowDuplicates = false)
+        {
+            var playlist = new List<MediaFile>
+            {
+                new MediaFile
+                {
+                    Url = "https://audioboom.com/posts/5766044-follow-up-305.mp3?source=rss&amp;stitched=1",
+                    Type = MediaFileType.Audio,
+                    Metadata = new MediaFileMetadata
+                    {
+                        Title = "Test1",
+                        TrackNumber = 0
+                    }
+                },
+                new MediaFile
+                {
+                    Url = "https://media.acast.com/mydadwroteaporno/s3e1-london-thursday15.55localtime/media.mp3",
+                    Type = MediaFileType.Audio,
+                    Metadata = new MediaFileMetadata
+                    {
+                        Title = "Test2",
+                        ArtUri = "https://d15mj6e6qmt1na.cloudfront.net/i/8457198.jpg",
+                        TrackNumber = 2
+                    }
+                },
+                new MediaFile
+                {
+                    Url = "https://audioboom.com/posts/5770261-ep-306-a-theory-of-evolution.mp3?source=rss&amp;stitched=1",
+                    Type = MediaFileType.Audio,
+                    Metadata = new MediaFileMetadata
+                    {
+                        Title = "Test3",
+                        ArtUri = "https://d15mj6e6qmt1na.cloudfront.net/i/30739475.jpg",
+                        TrackNumber = 3
+                    }
+                }
+            };
+
+            if (allowDuplicates)
+            {
+                playlist.Insert(1, new MediaFile
+                {
+                    Url = "https://media.acast.com/mydadwroteaporno/s3e1-london-thursday15.55localtime/media.mp3",
+                    Type = MediaFileType.Audio,
+                    Metadata = new MediaFileMetadata
+                    {
+                        Title = "Test2",
+                        ArtUri = "https://d15mj6e6qmt1na.cloudfront.net/i/8457198.jpg",
+                        TrackNumber = 1
+                    }
+                });
+            }
+
+            return playlist;
+        }
+
+        private void MainBtn_OnClicked(object sender, EventArgs e)
+        {
+            Navigation.PushAsync(new MediaFormsPage());
         }
 
         private void PlaybackChanged(object sender, PlayingChangedEventArgs e)
@@ -243,62 +302,6 @@ namespace MediaForms
         private void ShuffleClicked(object sender, EventArgs e)
         {
             CrossMediaManager.Current.MediaQueue.IsShuffled = !CrossMediaManager.Current.MediaQueue.IsShuffled;
-        }
-
-        private static List<MediaFile> RetrievePlaylist(bool allowDuplicates = false)
-        {
-            var playlist = new List<MediaFile>
-            {
-                new MediaFile
-                {
-                    Url = "https://audioboom.com/posts/5766044-follow-up-305.mp3?source=rss&amp;stitched=1",
-                    Type = MediaFileType.Audio,
-                    Metadata = new MediaFileMetadata
-                    {
-                        Title = "Test1",
-                        TrackNumber = 0
-                    }
-                },
-                new MediaFile
-                {
-                    Url = "https://media.acast.com/mydadwroteaporno/s3e1-london-thursday15.55localtime/media.mp3",
-                    Type = MediaFileType.Audio,
-                    Metadata = new MediaFileMetadata
-                    {
-                        Title = "Test2",
-                        ArtUri = "https://d15mj6e6qmt1na.cloudfront.net/i/8457198.jpg",
-                        TrackNumber = 2
-                    }
-                },
-                new MediaFile
-                {
-                    Url = "https://audioboom.com/posts/5770261-ep-306-a-theory-of-evolution.mp3?source=rss&amp;stitched=1",
-                    Type = MediaFileType.Audio,
-                    Metadata = new MediaFileMetadata
-                    {
-                        Title = "Test3",
-                        ArtUri = "https://d15mj6e6qmt1na.cloudfront.net/i/30739475.jpg",
-                        TrackNumber = 3
-                    }
-                }
-            };
-
-            if (allowDuplicates)
-            {
-                playlist.Insert(1, new MediaFile
-                {
-                    Url = "https://media.acast.com/mydadwroteaporno/s3e1-london-thursday15.55localtime/media.mp3",
-                    Type = MediaFileType.Audio,
-                    Metadata = new MediaFileMetadata
-                    {
-                        Title = "Test2",
-                        ArtUri = "https://d15mj6e6qmt1na.cloudfront.net/i/8457198.jpg",
-                        TrackNumber = 1
-                    }
-                });
-            }
-
-            return playlist;
         }
 
         private void PlaybackSlideValueChanged(object sender, ValueChangedEventArgs e)

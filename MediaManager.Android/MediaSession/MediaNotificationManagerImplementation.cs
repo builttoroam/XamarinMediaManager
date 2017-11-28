@@ -181,7 +181,7 @@ namespace Plugin.MediaManager
 
         private void MediaQueueCollectionChanged(object sender, NotifyCollectionChangedEventArgs e)
         {
-            if (e == null)
+            if (e == null || !_notificationStarted)
             {
                 return;
             }

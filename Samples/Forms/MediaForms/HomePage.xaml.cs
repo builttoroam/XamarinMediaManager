@@ -43,6 +43,7 @@ namespace MediaForms
             CrossMediaManager.Current.StatusChanged += CurrentOnStatusChanged;
 
             CrossMediaManager.Current.MediaFinished += MediaFinished;
+            CrossMediaManager.Current.MediaQueue.QueueMediaChanged += MediaQueueOnQueueMediaChanged;
             CrossMediaManager.Current.MediaQueue.CollectionChanged += MediaQueueCollectionChanged;
         }
 
@@ -54,6 +55,7 @@ namespace MediaForms
             CrossMediaManager.Current.StatusChanged -= CurrentOnStatusChanged;
 
             CrossMediaManager.Current.MediaFinished -= MediaFinished;
+            CrossMediaManager.Current.MediaQueue.QueueMediaChanged -= MediaQueueOnQueueMediaChanged;
             CrossMediaManager.Current.MediaQueue.CollectionChanged -= MediaQueueCollectionChanged;
         }
 
@@ -114,6 +116,11 @@ namespace MediaForms
                 NextButton.IsEnabled = CrossMediaManager.Current.MediaQueue.HasNext();
                 PreviousButton.IsEnabled = CrossMediaManager.Current.MediaQueue.HasPrevious();
             });
+        }
+
+        private void MediaQueueOnQueueMediaChanged(object sender, QueueMediaChangedEventArgs e)
+        {
+            Debug.WriteLine($"***MediaQueue Changed File: {e?.File?.Metadata?.Title}, Current Item Track Number: {e?.File?.Metadata?.TrackNumber}");
         }
 
         private async void PlayButton_OnClicked(object sender, EventArgs e)
@@ -192,6 +199,63 @@ namespace MediaForms
         {
             var playlist = RetrievePlaylist(true);
             await CrossMediaManager.Current.Play(playlist, 1);
+
+            foreach (var child in PlaylistActionContainer.Children)
+            {
+                child.IsEnabled = true;
+            }
+        }
+
+        private async void PlayAudioListWithAutomaticPlay_OnClicked(object sender, EventArgs e)
+        {
+            var playlist = new List<MediaFile>
+            {
+                new MediaFile
+                {
+                    Url = "https://podcastappdevapi.azureedge.net/api/audioFile?episodeId=2e699d29-f0c5-4e79-9bf7-a281c016c3ce",
+                    Type = MediaFileType.Audio,
+                    Metadata = new MediaFileMetadata
+                    {
+                        Title = "Cricket 1",
+                        TrackNumber = 0
+                    }
+                },
+                new MediaFile
+                {
+                    Url = "https://podcastappdevapi.azureedge.net/api/audioFile?episodeId=d5d296cc-c7b3-470c-ba5d-652a4823bf4a",
+                    Type = MediaFileType.Audio,
+                    Metadata = new MediaFileMetadata
+                    {
+                        Title = "Cricket 2",
+                        ArtUri = "https://d15mj6e6qmt1na.cloudfront.net/i/8457198.jpg",
+                        TrackNumber = 1
+                    }
+                },
+                new MediaFile
+                {
+                    Url = "https://podcastappdevapi.azureedge.net/api/audioFile?episodeId=d5d296cc-c7b3-470c-ba5d-652a4823bf4a",
+                    Type = MediaFileType.Audio,
+                    Metadata = new MediaFileMetadata
+                    {
+                        Title = "Cricket 2",
+                        ArtUri = "https://d15mj6e6qmt1na.cloudfront.net/i/8457198.jpg",
+                        TrackNumber = 2
+                    }
+                },
+                new MediaFile
+                {
+                    Url = "https://podcastappdevapi.azureedge.net/api/audioFile?episodeId=0a5288bd-b9dc-4a1a-9f57-8964ed5bc8bf",
+                    Type = MediaFileType.Audio,
+                    Metadata = new MediaFileMetadata
+                    {
+                        Title = "Cricket 3",
+                        ArtUri = "https://d15mj6e6qmt1na.cloudfront.net/i/30739475.jpg",
+                        TrackNumber = 3
+                    }
+                }
+            };
+
+            await CrossMediaManager.Current.Play(playlist);
 
             foreach (var child in PlaylistActionContainer.Children)
             {

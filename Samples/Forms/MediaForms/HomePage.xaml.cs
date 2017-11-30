@@ -233,6 +233,40 @@ namespace MediaForms
             }
         }
 
+        private async void PlaylistWithInvalidUrls_OnClicked(object sender, EventArgs e)
+        {
+            var invalidPlaylist = new List<MediaFile>
+            {
+                new MediaFile
+                {
+                    Url = "https://podcastapptestapi.azureedge.net/api/audioFile?episodeId=5205a2af-564a-4387-8041-a2bda8a52a86",
+                    Type = MediaFileType.Audio,
+                    Metadata = new MediaFileMetadata
+                    {
+                        Title = "Invalid 1",
+                        TrackNumber = 0
+                    }
+                },
+                new MediaFile
+                {
+                    Url = "https://podcastapptestapi.azureedge.net/api/audioFile?episodeId=25e5091d-21a8-4e66-84d1-d5e4bcd37697",
+                    Type = MediaFileType.Audio,
+                    Metadata = new MediaFileMetadata
+                    {
+                        Title = "Invalid 2",
+                        ArtUri = "https://d15mj6e6qmt1na.cloudfront.net/i/8457198.jpg",
+                        TrackNumber = 1
+                    }
+                }
+            };
+            await CrossMediaManager.Current.Play(invalidPlaylist);
+
+            foreach (var child in PlaylistActionContainer.Children)
+            {
+                child.IsEnabled = true;
+            }
+        }
+
         private async void PlayAudioListFromSecond_OnClicked(object sender, EventArgs e)
         {
             var playlist = RetrievePlaylist();

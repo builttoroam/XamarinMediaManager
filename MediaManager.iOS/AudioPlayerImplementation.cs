@@ -20,6 +20,7 @@ namespace Plugin.MediaManager
 {
     public class AudioPlayerImplementation : NSObject, IAudioPlayer
     {
+        private readonly IDictionary<AVPlayerItem, bool> observerForCurrentItemDictionary = new Dictionary<AVPlayerItem, bool>();
         private readonly NSString _statusObservationKey = new NSString(Constants.StatusObservationKey);
         private readonly NSString _rateObservationKey = new NSString(Constants.RateObservationKey);
         private readonly NSString _loadedTimeRangesObservationKey = new NSString(Constants.LoadedTimeRangesObservationKey);
@@ -758,7 +759,7 @@ namespace Plugin.MediaManager
 
         private void AddCurrentItemObservers()
         {
-            if (CurrentItem == null)
+            if (CurrentItem == null || observerForCurrentItemDictionary.ContainsKey(CurrentItem))
             {
                 return;
             }
@@ -770,11 +771,13 @@ namespace Plugin.MediaManager
             CurrentItem.AddObserver(this, _playbackBufferFullKey, NSKeyValueObservingOptions.New | NSKeyValueObservingOptions.Initial, _playbackBufferFullKey.Handle);
 
             NSNotificationCenter.DefaultCenter.AddObserver(AVPlayerItem.DidPlayToEndTimeNotification, HandlePlaybackFinished, CurrentItem);
+            
+            observerForCurrentItemDictionary.Add(CurrentItem, true);
         }
 
         private void RemoveCurrentItemObservers()
         {
-            if (CurrentItem == null)
+            if (CurrentItem == null || !observerForCurrentItemDictionary.ContainsKey(CurrentItem))
             {
                 return;
             }
@@ -787,6 +790,7 @@ namespace Plugin.MediaManager
                 CurrentItem.RemoveObserver(this, _playbackBufferFullKey);
 
                 NSNotificationCenter.DefaultCenter.RemoveObserver(CurrentItem);
+                observerForCurrentItemDictionary.Remove(CurrentItem);
             }
             catch (Exception ex)
             {

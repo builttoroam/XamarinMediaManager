@@ -286,7 +286,8 @@ namespace Plugin.MediaManager
 
         public async Task Seek(TimeSpan position)
         {
-            await Pause();
+            // You don't want to pause here
+            // await Pause();
             CurrentItem?.Seek(CMTime.FromSeconds(position.TotalSeconds, 1), HandlePlaybackSeekCompleted);
 
             await Task.CompletedTask;

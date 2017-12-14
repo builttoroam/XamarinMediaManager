@@ -1,4 +1,3 @@
-using System;
 using AVFoundation;
 using Plugin.MediaManager.Abstractions;
 using Plugin.MediaManager.Abstractions.EventArguments;
@@ -9,14 +8,23 @@ namespace Plugin.MediaManager
     {
         internal AVPlayer player;
 
+        private int maxVolume = 100;
+
         public VolumeManagerImplementation()
         {
         }
+
+        public event VolumeChangedEventHandler VolumeChanged;
 
         public int CurrentVolume
         {
             get
             {
+                if (player == null)
+                {
+                    return 0;
+                }
+
                 int.TryParse((player.Volume * 100).ToString(), out var vol);
                 return vol;
             }
@@ -38,7 +46,6 @@ namespace Plugin.MediaManager
             }
         }
 
-        private int maxVolume = 100;
         public int MaxVolume
         {
             get => maxVolume;
@@ -48,8 +55,6 @@ namespace Plugin.MediaManager
                 VolumeChanged?.Invoke(this, new VolumeChangedEventArgs(value, Muted));
             }
         }
-
-        public event VolumeChangedEventHandler VolumeChanged;
 
         public bool Muted
         {
